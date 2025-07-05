@@ -26,3 +26,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.success("Painel carregado com sucesso ✅")
+
+# ✅ Menu lateral com os links das páginas
+with st.sidebar:
+    st.page_link("1_Resumo_Funcionario.py", label="📊 Resumo do Funcionário")
+    st.page_link("2_Frequencia_Clientes.py", label="📆 Frequência dos Clientes")
+    st.page_link("3_Galeria_Clientes.py", label="🖼️ Galeria de Clientes")
+    st.page_link("4_Tempos_Atendimento.py", label="⏱️ Tempos de Atendimento")
+    st.page_link("5_Clientes_Detalhes.py", label="🧑‍🤝‍🧑 Detalhes dos Clientes")
