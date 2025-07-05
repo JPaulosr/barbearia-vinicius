@@ -1,5 +1,7 @@
-streamlit
+streamlit==1.35.0
+pandas
+numpy
 gspread
 oauth2client
-toml
-pandas
+plotly
+matplotlib
