@@ -3,40 +3,43 @@ import pandas as pd
 from datetime import datetime
 import plotly.express as px
 
+# ========== CONFIGURAÇÃO ========== #
 st.set_page_config(page_title="Painel Vinicius", layout="wide")
 st.title("💪 Painel da Barbearia - Versão Vinicius")
 
+# ========== AUTENTICAÇÃO POR SENHA ========== #
+SENHA_CORRETA = "vinicius2025"
+
+senha = st.text_input("🔐 Digite a senha para acessar:", type="password")
+if senha != SENHA_CORRETA:
+    st.warning("Acesso restrito. Insira a senha correta para continuar.")
+    st.stop()
+
+# ========== CABEÇALHO ========== #
 st.markdown("""
 <div style="background-color:#003049;padding:10px;border-radius:5px">
     <span style="color:white;">Navegue pelas páginas ao lado para acessar os dados da sua performance e dos seus clientes.</span>
 </div>
 """, unsafe_allow_html=True)
 
+# ========== FUNÇÃO DE CARREGAMENTO ========== #
 @st.cache_data
 def carregar_base_vinicius():
     url = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/gviz/tq?tqx=out:csv&sheet=Base%20de%20Dados"
     df = pd.read_csv(url, encoding="utf-8")
 
-    # Limpeza de colunas
     df.columns = df.columns.str.strip()
     df.columns = df.columns.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
 
-    # Detecta coluna de valor
     col_valor = next((col for col in df.columns if "valor" in col.lower()), None)
     if not col_valor:
         raise ValueError("❌ Coluna 'Valor' não encontrada.")
     df.rename(columns={col_valor: "Valor"}, inplace=True)
 
-    # Converte data
     df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True)
-
-    # Padroniza nome do funcionário
     df["Funcionario"] = df["Funcionario"].astype(str).str.strip().str.title()
-
-    # Filtra Vinicius
     df = df[df["Funcionario"] == "Vinicius"]
 
-    # Converte valor
     df["Valor"] = (
         df["Valor"]
         .astype(str)
@@ -48,10 +51,10 @@ def carregar_base_vinicius():
 
     return df
 
+# ========== LÓGICA PRINCIPAL ========== #
 try:
     df = carregar_base_vinicius()
 
-    # -------------------- Seletor Mês/Ano --------------------
     st.subheader("📅 Selecione o Mês e o Ano")
     meses_dict = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
@@ -67,13 +70,11 @@ try:
     mes = col1.selectbox("📆 Mês", options=meses_dict.keys(), format_func=lambda x: meses_dict[x], index=mes_atual - 1)
     ano = col2.selectbox("🗓️ Ano", options=anos, index=anos.index(ano_atual))
 
-    # -------------------- Filtragem --------------------
     df_mes = df[(df["Data"].dt.month == mes) & (df["Data"].dt.year == ano)]
     mes_ant = 12 if mes == 1 else mes - 1
     ano_ant = ano - 1 if mes == 1 else ano
     df_ant = df[(df["Data"].dt.month == mes_ant) & (df["Data"].dt.year == ano_ant)]
 
-    # -------------------- Métricas --------------------
     receita = df_mes["Valor"].sum()
     receita_ant = df_ant["Valor"].sum()
     variacao = ((receita - receita_ant) / receita_ant * 100) if receita_ant > 0 else 0
@@ -84,14 +85,12 @@ try:
 
     st.markdown("---")
 
-    # -------------------- Gráfico de barras --------------------
     st.subheader(f"📊 Evolução Diária - {meses_dict[mes]}/{ano}")
     df_dia = df_mes.groupby(df_mes["Data"].dt.date)["Valor"].sum().reset_index()
     fig = px.bar(df_dia, x="Data", y="Valor", text_auto=True, labels={"Data": "Dia", "Valor": "Receita (R$)"})
     fig.update_layout(xaxis_title="Data", yaxis_title="Receita (R$)", height=400)
     st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------- Top Clientes --------------------
     st.subheader("👤 Top 5 Clientes do Mês")
     top = df_mes.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(5).reset_index()
     st.table(top.rename(columns={"Cliente": "Cliente", "Valor": "Receita (R$)"}))
