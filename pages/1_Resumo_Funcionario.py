@@ -48,13 +48,48 @@ def carregar_despesas():
 
 df_despesas = carregar_despesas()
 
-# === FILTRAR SOMENTE DADOS DO VINICIUS ===
-df = df[df["Funcionário"] == "Vinicius"]
+# === Lista de funcionários ===
+funcionarios = df["Funcionário"].dropna().unique().tolist()
+funcionarios.sort()
 
 # === Filtro por ano ===
 anos = sorted(df["Ano"].dropna().unique().tolist(), reverse=True)
 ano_escolhido = st.selectbox("🗕️ Filtrar por ano", anos)
-df_func = df[df["Ano"] == ano_escolhido].copy()
+
+# === Filtros adicionais ===
+col_filtros = st.columns(3)
+
+# === Seleção de funcionário ===
+funcionario_escolhido = st.selectbox("📋 Escolha um funcionário", funcionarios)
+df_func = df[(df["Funcionário"] == funcionario_escolhido) & (df["Ano"] == ano_escolhido)].copy()
+
+# Filtro por mês
+meses_disponiveis = df_func["Data"].dt.month.unique()
+meses_disponiveis.sort()
+mes_filtro = col_filtros[0].selectbox("📆 Filtrar por mês", options=["Todos"] + list(meses_disponiveis))
+if mes_filtro != "Todos":
+    df_func = df_func[df_func["Data"].dt.month == mes_filtro]
+
+# Filtro por dia
+dias_disponiveis = df_func["Data"].dt.day.unique()
+dias_disponiveis.sort()
+dia_filtro = col_filtros[1].selectbox("📅 Filtrar por dia", options=["Todos"] + list(dias_disponiveis))
+if dia_filtro != "Todos":
+    df_func = df_func[df_func["Data"].dt.day == dia_filtro]
+
+# Filtro por semana
+df_func["Semana"] = df_func["Data"].dt.isocalendar().week
+semanas_disponiveis = df_func["Semana"].unique().tolist()
+semanas_disponiveis.sort()
+semana_filtro = col_filtros[2].selectbox("🗓️ Filtrar por semana", options=["Todas"] + list(semanas_disponiveis))
+if semana_filtro != "Todas":
+    df_func = df_func[df_func["Semana"] == semana_filtro]
+
+# === Filtro por tipo de serviço ===
+tipos_servico = df_func["Serviço"].dropna().unique().tolist()
+tipo_selecionado = st.multiselect("Filtrar por tipo de serviço", tipos_servico)
+if tipo_selecionado:
+    df_func = df_func[df_func["Serviço"].isin(tipo_selecionado)]
 
 # === Insights do Funcionário ===
 st.subheader("📌 Insights do Funcionário")
@@ -73,29 +108,11 @@ col4.metric("🎫 Ticket médio", f"R$ {ticket_medio_geral:,.2f}".replace(",", "
 
 # Dia mais cheio
 dia_mais_cheio = df_func.groupby(df_func["Data"].dt.date).agg({"Valor": "sum", "Cliente": "count"}).reset_index()
-dia_mais_cheio = dia_mais_cheio.sort_values("Cliente", ascending=False).head(1)
+dia_mais_cheio.columns = ["Data", "Valor", "Qtd Atendimentos"]
+dia_mais_cheio = dia_mais_cheio.sort_values("Qtd Atendimentos", ascending=False).head(1)
 if not dia_mais_cheio.empty:
-    data_cheia = pd.to_datetime(dia_mais_cheio.iloc[0, 0]).strftime("%d/%m/%Y")
-    qtd_atend = int(dia_mais_cheio.iloc[0, 2])
-    valor_dia = dia_mais_cheio.iloc[0, 1] * 0.5
+    data_cheia = pd.to_datetime(dia_mais_cheio.iloc[0]["Data"]).strftime("%d/%m/%Y")
+    qtd_atend = int(dia_mais_cheio.iloc[0]["Qtd Atendimentos"])
+    valor_dia = float(dia_mais_cheio.iloc[0]["Valor"]) * 0.5
     valor_formatado = f"R$ {valor_dia:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
-    st.info(f"📅 Dia com mais atendimentos: **{data_cheia}** com **{qtd_atend} atendimentos** — Valor recebido: **{valor_formatado}**")
-
-# Receita mensal
-st.subheader("📊 Receita Mensal por Mês e Ano")
-df_func["MesNome"] = df_func["Data"].dt.strftime("%b %Y")
-df_func["MesNum"] = df_func["Data"].dt.month
-df_receita = df_func.groupby(["MesNum", "MesNome"]).agg({"Valor": "sum"}).reset_index()
-df_receita = df_receita.sort_values("MesNum")
-df_receita["Comissão"] = df_receita["Valor"] * 0.5
-
-df_receita["ComissãoFormat"] = df_receita["Comissão"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
-
-fig = px.bar(df_receita, x="MesNome", y="Comissão", text="ComissãoFormat", labels={"Comissão": "Valor Recebido"})
-fig.update_layout(template="plotly_dark")
-st.plotly_chart(fig, use_container_width=True)
-
-# Exportação
-buffer = BytesIO()
-df_func.to_excel(buffer, index=False, sheet_name="Filtrado", engine="openpyxl")
-st.download_button("📄 Baixar Excel com dados filtrados", data=buffer.getvalue(), file_name="dados_filtrados_vinicius.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.info(f"📅 Dia com mais atendimentos: **{data_cheia}** com **{qtd_atend} atendimentos** — Valor recebido (50%): **{valor_formatado}**")
