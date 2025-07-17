@@ -18,6 +18,9 @@ cloudinary.config(
     api_secret=st.secrets["CLOUDINARY"]["api_secret"]
 )
 
+# ========== IMAGEM PADRÃO ==========
+LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
+
 # ========== CARREGAR DADOS ==========
 def carregar_dados():
     try:
@@ -51,7 +54,6 @@ else:
     if fotos_validas.empty:
         st.warning("Nenhuma imagem disponível para esse filtro.")
     else:
-        # Agrupamento e ordenação
         fotos_validas["Cliente"] = fotos_validas["Cliente"].astype(str)
         fotos_validas = fotos_validas.sort_values(by="Cliente", key=lambda x: x.str.lower())
         grupos = fotos_validas.groupby(fotos_validas["Cliente"].str[0].str.upper())
@@ -59,6 +61,10 @@ else:
 
         st.markdown("### 🔡 Navegação por letra")
         st.markdown(" | ".join([f"[{letra}](#{letra.lower()})" for letra in letras_disponiveis]), unsafe_allow_html=True)
+
+        # Inicializa a chave de sessão
+        if "expand_all" not in st.session_state:
+            st.session_state["expand_all"] = True
 
         col1, col2 = st.columns([1, 1])
         with col1:
@@ -78,13 +84,18 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
+                        # Carrega a imagem com fallback
                         try:
-                            response = requests.get(row["Foto"])
-                            img = Image.open(BytesIO(response.content))
-                            st.image(img, caption=row["Cliente"], use_container_width=True)
+                            url_img = row["Foto"]
+                            response = requests.get(url_img, timeout=5)
+                            if response.status_code == 200:
+                                img = Image.open(BytesIO(response.content))
+                            else:
+                                raise Exception("Imagem inválida")
                         except:
-                            st.error(f"Erro ao carregar imagem de {row['Cliente']}")
-                            continue
+                            img = Image.open(requests.get(LOGO_PADRAO, stream=True).raw)
+
+                        st.image(img, caption=row["Cliente"], use_container_width=True)
 
                         with st.expander(f"🛠 Ações para {row['Cliente']}"):
                             if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
@@ -99,7 +110,7 @@ else:
                                         nome_img = row["Foto"].split("/")[-1].split(".")[0]
                                         public_id = f"Fotos clientes/{nome_img}"
                                         cloudinary.uploader.destroy(public_id)
-                                        st.success("✅ Imagem deletada do Cloudinary com sucesso.")
+                                        st.success("✅ Imagem deletada do Cloudinary.")
 
                                     st.experimental_rerun()
                                 except Exception as e:
