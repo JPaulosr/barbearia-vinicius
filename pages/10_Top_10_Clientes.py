@@ -48,15 +48,23 @@ df = carregar_dados()
 df = df[df["Funcionário"] == "Vinicius"].copy()
 fotos_clientes = carregar_fotos_clientes()
 
-# Contar atendimentos por cliente
-ranking = df["Cliente"].value_counts().reset_index()
+# Agrupar por Cliente + Data (1 atendimento por dia)
+df_agrupado = df.groupby(["Cliente", "Data"]).agg({
+    "Valor": "sum"
+}).reset_index()
+
+# Soma total por cliente
+soma_valores = df_agrupado.groupby("Cliente")["Valor"].sum().reset_index(name="Total_Gasto")
+atendimentos_por_dia = df_agrupado.groupby("Cliente")["Data"].nunique().reset_index(name="Qtd_Atendimentos")
+ranking = pd.merge(soma_valores, atendimentos_por_dia, on="Cliente")
 
 # Remover nomes genéricos e bolivianos
 nomes_invalidos = ["boliviano", "brasileiro", "menino", "cliente", "moicano", "morador", "menina"]
 ranking = ranking[~ranking["Cliente"].str.lower().isin(nomes_invalidos)]
 ranking = ranking[~ranking["Cliente"].str.lower().str.contains("sem nome|desconhecido|teste")]
 
-ranking.columns = ["Cliente", "Qtd_Atendimentos"]
+# Ranking por valor total gasto
+ranking = ranking.sort_values("Total_Gasto", ascending=False).reset_index(drop=True)
 top10 = ranking.head(10)
 
 # Exibir ranking
