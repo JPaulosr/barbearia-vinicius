@@ -98,13 +98,13 @@ st.subheader("📌 Insights do Funcionário")
 col1, col2, col3, col4 = st.columns(4)
 total_atendimentos = df_func.shape[0]
 clientes_unicos = df_func["Cliente"].nunique()
-total_receita = df_func["Valor"].sum()
-ticket_medio_geral = df_func["Valor"].mean()
+total_receita = df_func["Valor"].sum() * 0.5
+ticket_medio_geral = df_func["Valor"].mean() * 0.5
 
 col1.metric("🔢 Total de atendimentos", total_atendimentos)
 col2.metric("👥 Clientes únicos", clientes_unicos)
-col3.metric("💰 Receita total", f"R$ {total_receita:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
-col4.metric("🎫 Ticket médio", f"R$ {ticket_medio_geral:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
+col3.metric("💰 Receita total (50%)", f"R$ {total_receita:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
+col4.metric("🎫 Ticket médio (50%)", f"R$ {ticket_medio_geral:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
 
 # Dia mais cheio
 dia_mais_cheio = df_func.groupby(df_func["Data"].dt.date).agg({"Valor": "sum", "Cliente": "count"}).reset_index()
@@ -115,4 +115,4 @@ if not dia_mais_cheio.empty:
     qtd_atend = int(dia_mais_cheio.iloc[0]["Qtd Atendimentos"])
     valor_dia = float(dia_mais_cheio.iloc[0]["Valor"]) * 0.5
     valor_formatado = f"R$ {valor_dia:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
-    st.info(f"📅 Dia com mais atendimentos: **{data_cheia}** com **{qtd_atend} atendimentos** — Valor recebido (50%): **{valor_formatado}**")
+    st.info(f"📅 Dia com mais atendimentos: **{data_cheia}** com **{qtd_atend} atendimentos** — Valor recebido: **{valor_formatado}**")
