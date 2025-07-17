@@ -124,7 +124,7 @@ col4.metric("🔴 Muito atrasado", freq_df[freq_df["Status_Label"] == "Muito atr
 
 # === NOVO LAYOUT — CARTÕES EM GRADE ===
 def exibir_clientes_em_galeria(df_input, titulo):
-    st.markdown(titulo)
+    st.markdown(f"### {titulo}")
 
     nome_filtrado = st.text_input(f"🔍 Filtrar {titulo.replace('#', '').strip()} por nome", key=titulo).strip().lower()
     if nome_filtrado:
@@ -150,12 +150,12 @@ def exibir_clientes_em_galeria(df_input, titulo):
                 f"⏳ {row['Dias Desde Último']} dias sem vir"
             )
 
-# === EXIBIÇÃO FINAL COM NOVO LAYOUT ===
-st.divider()
-exibir_clientes_em_galeria(freq_df[freq_df["Status_Label"] == "Muito atrasado"], "## 🔴 Muito Atrasados")
+# === EXIBIÇÃO FINAL COM EXPANDERS ===
+with st.expander("🔴 Muito Atrasados", expanded=True):
+    exibir_clientes_em_galeria(freq_df[freq_df["Status_Label"] == "Muito atrasado"], "🔴 Muito Atrasados")
 
-st.divider()
-exibir_clientes_em_galeria(freq_df[freq_df["Status_Label"] == "Pouco atrasado"], "## 🟠 Pouco Atrasados")
+with st.expander("🟠 Pouco Atrasados", expanded=False):
+    exibir_clientes_em_galeria(freq_df[freq_df["Status_Label"] == "Pouco atrasado"], "🟠 Pouco Atrasados")
 
-st.divider()
-exibir_clientes_em_galeria(freq_df[freq_df["Status_Label"] == "Em dia"], "## 🟢 Em Dia")
+with st.expander("🟢 Em Dia", expanded=False):
+    exibir_clientes_em_galeria(freq_df[freq_df["Status_Label"] == "Em dia"], "🟢 Em Dia")
