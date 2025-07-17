@@ -49,7 +49,7 @@ else:
     if nome_filtrado != "Todos":
         df = df[df["Cliente"] == nome_filtrado]
 
-    fotos_validas = df.dropna(subset=["Foto"])
+    fotos_validas = df.dropna(subset=["Cliente"])
 
     if fotos_validas.empty:
         st.warning("Nenhuma imagem disponível para esse filtro.")
@@ -80,15 +80,17 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        url_imagem = row["Foto"] if pd.notna(row["Foto"]) and "http" in row["Foto"] else LOGO_PADRAO
                         nome_cliente = str(row.get("Cliente", "Sem nome"))
+                        url_imagem = row.get("Foto", "")
+                        if pd.isna(url_imagem) or not isinstance(url_imagem, str) or not url_imagem.startswith("http"):
+                            url_imagem = LOGO_PADRAO
 
                         try:
                             response = requests.get(url_imagem)
                             img = Image.open(BytesIO(response.content))
                             st.image(img, caption=nome_cliente, use_container_width=True)
                         except:
-                            st.markdown(f"![{nome_cliente} (imagem padrão)]({LOGO_PADRAO})")
+                            st.image(LOGO_PADRAO, caption=f"{nome_cliente} (imagem padrão)", use_container_width=True)
 
                         with st.expander(f"🛠 Ações para {nome_cliente}"):
                             if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
@@ -99,8 +101,8 @@ else:
                                         aba_clientes.update_cell(cell.row, col_foto, "")
                                         st.success("✅ Imagem removida da planilha.")
 
-                                    if "res.cloudinary.com" in row["Foto"]:
-                                        nome_img = row["Foto"].split("/")[-1].split(".")[0]
+                                    if "res.cloudinary.com" in url_imagem:
+                                        nome_img = url_imagem.split("/")[-1].split(".")[0]
                                         public_id = f"Fotos clientes/{nome_img}"
                                         cloudinary.uploader.destroy(public_id)
                                         st.success("✅ Imagem deletada do Cloudinary com sucesso.")
