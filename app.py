@@ -40,6 +40,9 @@ def carregar_base_vinicius():
     )
     df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce")
 
+    # Aplicar 50%
+    df["Valor"] = df["Valor"] * 0.5
+
     return df
 
 # ========== LÓGICA PRINCIPAL ========== #
@@ -71,7 +74,7 @@ try:
     variacao = ((receita - receita_ant) / receita_ant * 100) if receita_ant > 0 else 0
 
     col1, col2 = st.columns(2)
-    col1.metric("💰 Receita no Mês", f"R$ {receita:,.2f}".replace(".", "v").replace(",", ".").replace("v", ","), f"{variacao:.1f}% vs anterior")
+    col1.metric("💰 Receita no Mês (50%)", f"R$ {receita:,.2f}".replace(".", "v").replace(",", ".").replace("v", ","), f"{variacao:.1f}% vs anterior")
     col2.metric("📅 Atendimentos", len(df_mes))
 
     st.markdown("---")
@@ -84,7 +87,8 @@ try:
 
     st.subheader("👤 Top 5 Clientes do Mês")
     top = df_mes.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(5).reset_index()
-    st.table(top.rename(columns={"Cliente": "Cliente", "Valor": "Receita (R$)"}))
+    top["Valor"] = top["Valor"].apply(lambda x: f"R$ {x:,.2f}".replace(".", "v").replace(",", ".").replace("v", ","))
+    st.table(top.rename(columns={"Cliente": "Cliente", "Valor": "Receita (50%)"}))
 
 except Exception as e:
     st.error(f"Erro ao carregar os dados: {e}")
