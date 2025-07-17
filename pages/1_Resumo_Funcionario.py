@@ -18,7 +18,7 @@ def carregar_dados_google_sheets(sheet_url, aba_nome):
         st.error(f"Erro ao carregar dados da aba '{aba_nome}': {e}")
         return pd.DataFrame()
 
-# URL da planilha conectada
+# 📄 Planilha conectada
 sheet_url = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/edit?usp=sharing"
 df = carregar_dados_google_sheets(sheet_url, "Base de Dados")
 
@@ -30,10 +30,10 @@ if 'Valor' in df.columns:
     df['Valor'] = df['Valor'].astype(str).str.replace('R$', '', regex=False).str.replace(',', '.').str.strip()
     df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce')
 
-# 👨‍🔧 Filtra apenas atendimentos do Vinicius
+# 👨‍🔧 Filtra o funcionário Vinicius
 df = df[df['Funcionário'] == 'Vinicius']
 
-# 🗓️ Processa datas
+# 📅 Trata datas
 if 'Data' in df.columns:
     df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
     df = df.dropna(subset=['Data'])
@@ -49,7 +49,7 @@ mes = col2.selectbox("📅 Filtrar por mês", options=['Todos'] + sorted(df['Mes
 dia = col3.selectbox("📅 Filtrar por dia", options=['Todos'] + sorted(df['Dia'].unique()))
 semana = col4.selectbox("📅 Filtrar por dia da semana", options=['Todas'] + sorted(df['DiaSemana'].unique()))
 
-# 🧮 Aplica os filtros
+# 📌 Aplica filtros
 filtro = df[df['Ano'] == ano]
 if mes != 'Todos':
     filtro = filtro[filtro['Mes'] == mes]
@@ -58,7 +58,7 @@ if dia != 'Todos':
 if semana != 'Todas':
     filtro = filtro[filtro['DiaSemana'] == semana]
 
-# 📊 KPIs principais
+# 📊 KPIs
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("🧾 Total de atendimentos", len(filtro))
 col2.metric("👥 Clientes únicos", filtro['Cliente'].nunique())
@@ -73,26 +73,30 @@ if not filtro.empty:
     qtd_top = filtro['Data'].value_counts().max()
     st.info(f"📅 Dia com mais atendimentos: **{dia_top}** com **{qtd_top} atendimentos**")
 
-# 📈 Atendimentos por dia da semana
+# 📈 Gráfico: Atendimentos por dia da semana
 atend_semana = filtro['DiaSemana'].value_counts().reindex(['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'])
 st.subheader("📅 Atendimentos por Dia da Semana")
 fig1 = px.bar(
-    x=atend_semana.index, y=atend_semana.values,
+    x=atend_semana.index,
+    y=atend_semana.values,
     labels={'x': 'Dia da Semana', 'y': 'Quantidade'},
-    text=atend_semana.values, height=400
+    text=atend_semana.values,
+    height=400
 )
 fig1.update_layout(yaxis_title='Atendimentos', xaxis_title='Dia da Semana')
 st.plotly_chart(fig1, use_container_width=True)
 
-# 📊 Receita mensal
+# 📊 Gráfico: Receita mensal por mês e ano
 st.subheader("📊 Receita Mensal por Mês e Ano")
 df_receita = filtro.groupby(['Ano', 'Mes'])['Valor'].sum().reset_index()
 
-# 🛠️ Corrige erro de datetime
+# ✅ Correção robusta de tipo e datas
+df_receita['Ano'] = pd.to_numeric(df_receita['Ano'], errors='coerce')
+df_receita['Mes'] = pd.to_numeric(df_receita['Mes'], errors='coerce')
 df_receita = df_receita.dropna(subset=['Ano', 'Mes'])
 df_receita['Ano'] = df_receita['Ano'].astype(int)
 df_receita['Mes'] = df_receita['Mes'].astype(int)
-df_receita['DataLabel'] = pd.to_datetime(df_receita[['Ano', 'Mes']].assign(DAY=1)).dt.strftime('%B %Y')
+df_receita['DataLabel'] = pd.to_datetime(dict(year=df_receita['Ano'], month=df_receita['Mes'], day=1)).dt.strftime('%B %Y')
 
 fig2 = px.bar(
     df_receita, x='DataLabel', y='Valor', text='Valor', labels={'Valor': 'Receita (R$)'}
