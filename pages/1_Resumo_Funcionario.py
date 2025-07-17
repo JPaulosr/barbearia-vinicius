@@ -89,11 +89,15 @@ col2.metric("👥 Clientes únicos", df_func["Cliente"].nunique())
 col3.metric("💰 Receita total", f"R$ {df_func['Valor'].sum():,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
 col4.metric("🎼 Ticket médio", f"R$ {df_func['Valor'].mean():,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
 
-# === Gráficos e relatórios similares ao anterior ===
-# (reutilizar os mesmos blocos do código anterior, apenas garantindo que todos estão usando df_func e o nome "Vinicius")
-
 # === Exportar dados ===
 st.subheader("📄 Exportar dados filtrados")
 buffer = BytesIO()
-df_func.to_excel(buffer, index=False, sheet_name="Vinicius", engine="openpyxl")
-st.download_button("Baixar Excel com dados filtrados", data=buffer.getvalue(), file_name="vinicius_dados_filtrados.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+    df_func.to_excel(writer, index=False, sheet_name="Vinicius")
+buffer.seek(0)
+st.download_button(
+    label="Baixar Excel com dados filtrados",
+    data=buffer,
+    file_name="vinicius_dados_filtrados.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
