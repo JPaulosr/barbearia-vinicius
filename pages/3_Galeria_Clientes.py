@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import requests
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 from io import BytesIO
 from google.oauth2.service_account import Credentials
 import cloudinary
@@ -27,8 +27,8 @@ def carregar_imagem_segura(url):
         response = requests.get(url, timeout=5)
         if response.status_code == 200 and "image" in response.headers.get("Content-Type", ""):
             return Image.open(BytesIO(response.content))
-    except Exception as e:
-        st.warning(f"Erro ao carregar imagem: {e}")
+    except Exception:
+        pass
     return None
 
 # ========== CARREGAR DADOS ==========
@@ -90,23 +90,52 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        # Carregar imagem segura
+                        # Carregar imagem com segurança
                         img = carregar_imagem_segura(row["Foto"])
                         if not isinstance(img, Image.Image):
                             img = carregar_imagem_segura(LOGO_PADRAO)
 
                         if isinstance(img, Image.Image):
-                            try:
-                                st.image(img, caption=row["Cliente"], use_container_width=True)
-                            except Exception as e:
-                                st.error(f"Erro ao exibir imagem de {row['Cliente']}: {e}")
-                                st.write("Tipo de img:", type(img))
+                            st.image(img, caption=row["Cliente"], use_container_width=True)
                         else:
                             st.warning(f"⚠️ Imagem inválida para {row['Cliente']}")
-                            st.write("Tipo inválido:", type(img))
 
-                        with st.expander(f"🛠 Ações para {row['Cliente']}"):
-                            if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
+                        # === AÇÕES ===
+                        if hasattr(st, "popover"):
+                            with st.popover(f"🛠 Ações para {row['Cliente']}", use_container_width=True):
+                                st.markdown(f"### Ações para **{row['Cliente']}**")
+
+                                if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
+                                    try:
+                                        cell = aba_clientes.find(str(row["Cliente"]))
+                                        if cell:
+                                            col_foto = df.columns.get_loc("Foto") + 1
+                                            aba_clientes.update_cell(cell.row, col_foto, "")
+                                            st.success("✅ Imagem removida da planilha.")
+
+                                        if "res.cloudinary.com" in row["Foto"]:
+                                            nome_img = row["Foto"].split("/")[-1].split(".")[0]
+                                            public_id = f"Fotos clientes/{nome_img}"
+                                            cloudinary.uploader.destroy(public_id)
+                                            st.success("✅ Imagem deletada do Cloudinary com sucesso.")
+
+                                        st.experimental_rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao deletar imagem: {e}")
+
+                                nova_foto = st.text_input("🔄 Substituir link da imagem", key=f"edit_{idx}")
+                                if nova_foto:
+                                    try:
+                                        cell = aba_clientes.find(str(row["Cliente"]))
+                                        if cell:
+                                            col_foto = df.columns.get_loc("Foto") + 1
+                                            aba_clientes.update_cell(cell.row, col_foto, nova_foto)
+                                            st.success("✅ Imagem substituída com sucesso.")
+                                            st.experimental_rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erro ao substituir imagem: {e}")
+                        else:
+                            if st.button(f"❌ Excluir imagem de {row['Cliente']}", key=f"btn_excluir_{idx}"):
                                 try:
                                     cell = aba_clientes.find(str(row["Cliente"]))
                                     if cell:
@@ -122,16 +151,4 @@ else:
 
                                     st.experimental_rerun()
                                 except Exception as e:
-                                    st.error(f"❌ Erro ao deletar imagem: {e}")
-
-                            nova_foto = st.text_input("🔄 Substituir link da imagem", key=f"edit_{idx}")
-                            if nova_foto:
-                                try:
-                                    cell = aba_clientes.find(str(row["Cliente"]))
-                                    if cell:
-                                        col_foto = df.columns.get_loc("Foto") + 1
-                                        aba_clientes.update_cell(cell.row, col_foto, nova_foto)
-                                        st.success("✅ Imagem substituída com sucesso.")
-                                        st.experimental_rerun()
-                                except Exception as e:
-                                    st.error(f"❌ Erro ao substituir imagem: {e}")
+                                    st.error(f"Erro ao deletar imagem: {e}")
