@@ -1,24 +1,31 @@
 import streamlit as st
+import pandas as pd
+from datetime import datetime
+import plotly.express as px
 
-# Senha definida
+# ========== SENHA ========== #
 SENHA_CORRETA = "vinicius2025"
 
-# Verifica se usuário já autenticou
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
-# Se ainda não autenticado, exibe campo de senha
 if not st.session_state["autenticado"]:
-    senha = st.text_input("🔐 Digite a senha para acessar:", type="password")
-    if senha == SENHA_CORRETA:
-        st.session_state["autenticado"] = True
-        st.experimental_rerun()
-    else:
-        st.warning("Acesso restrito. Insira a senha correta.")
-        st.stop()
-
+    with st.form("form_login", clear_on_submit=True):
+        senha = st.text_input("🔐 Digite a senha para acessar:", type="password")
+        entrar = st.form_submit_button("Entrar")
+        if entrar:
+            if senha == SENHA_CORRETA:
+                st.session_state["autenticado"] = True
+                st.success("✅ Acesso liberado. Carregando painel...")
+                st.experimental_rerun()
+            else:
+                st.error("❌ Senha incorreta. Tente novamente.")
+    st.stop()
 
 # ========== CABEÇALHO ========== #
+st.set_page_config(page_title="Painel Vinicius", layout="wide")
+st.title("💪 Painel da Barbearia - Versão Vinicius")
+
 st.markdown("""
 <div style="background-color:#003049;padding:10px;border-radius:5px">
     <span style="color:white;">Navegue pelas páginas ao lado para acessar os dados da sua performance e dos seus clientes.</span>
