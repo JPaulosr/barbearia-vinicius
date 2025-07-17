@@ -37,6 +37,7 @@ def carregar_base_vinicius():
     dados = aba.get_all_records()
     df = pd.DataFrame(dados)
     df["Data"] = pd.to_datetime(df["Data"])
+    df["Valor"] = pd.to_numeric(df["Valor"].replace("R$", "", regex=True).str.replace(",", "."), errors="coerce")
     df = df[df["Funcionário"] == "Vinicius"]
     return df
 
@@ -50,11 +51,9 @@ ano_atual = hoje.year
 df_mes_atual = df[(df["Data"].dt.month == mes_atual) & (df["Data"].dt.year == ano_atual)]
 df_mes_anterior = df[(df["Data"].dt.month == (mes_atual - 1)) & (df["Data"].dt.year == ano_atual)]
 
-# ========== CÁLCULO DE ATENDIMENTOS (considerando combos corretamente) ==========
+# ========== CONTAR ATENDIMENTOS ==========
 def contar_atendimentos(df_raw):
     df_raw = df_raw.copy()
-    # A partir de 11/05/2025, considerar agrupamento por cliente + data
-    df_raw["Data"] = pd.to_datetime(df_raw["Data"])
     corte_data = pd.to_datetime("2025-05-11")
     antes = df_raw[df_raw["Data"] < corte_data]
     depois = df_raw[df_raw["Data"] >= corte_data]
@@ -67,10 +66,9 @@ def contar_atendimentos(df_raw):
 atendimentos_atual = contar_atendimentos(df_mes_atual)
 atendimentos_anterior = contar_atendimentos(df_mes_anterior)
 
-receita_atual = df_mes_atual["Valor líquido"].sum()
-receita_anterior = df_mes_anterior["Valor líquido"].sum()
+receita_atual = df_mes_atual["Valor"].sum()
+receita_anterior = df_mes_anterior["Valor"].sum()
 
-# ========== VARIAÇÕES ==========
 def calc_variacao(valor_atual, valor_ant):
     if valor_ant == 0:
         return "—"
