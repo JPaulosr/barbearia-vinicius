@@ -5,25 +5,26 @@ from PIL import Image
 from io import BytesIO
 import gspread
 from google.oauth2.service_account import Credentials
+import json
 
 st.set_page_config(page_title="Galeria de Clientes", layout="wide")
 
-# ID da planilha
+# Imagem padrão
+LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
+
+# ID da planilha e aba
 SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
 NOME_ABA = "clientes_status"
-
-# URL imagem padrão
-LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
 
 @st.cache_data
 def carregar_dados():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_file("credenciais.json", scopes=scope)
+    service_account_info = dict(st.secrets["GCP_SERVICE_ACCOUNT"])
+    creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
     client = gspread.authorize(creds)
-    sheet = client.open_by_key(SHEET_ID)
-    aba = sheet.worksheet(NOME_ABA)
-    data = aba.get_all_records()
-    df = pd.DataFrame(data)
+    aba = client.open_by_key(SHEET_ID).worksheet(NOME_ABA)
+    dados = aba.get_all_records()
+    df = pd.DataFrame(dados)
     df['Foto'] = df['Foto'].astype(str)
     df['Cliente'] = df['Cliente'].astype(str)
     return df
@@ -36,7 +37,7 @@ def carregar_imagem(url):
         return None
 
 df = carregar_dados()
-df = df[df['Status'] == 'Ativo']  # só clientes ativos
+df = df[df['Status'] == 'Ativo']
 
 st.title("🧑‍🦱 Galeria de Clientes")
 clientes = df['Cliente'].dropna().unique()
@@ -62,7 +63,6 @@ for letra in letras:
             nome_cliente = row['Cliente']
             url_foto = row['Foto'].strip()
             imagem = carregar_imagem(url_foto) if url_foto.startswith("http") else None
-
             if imagem:
                 st.image(imagem, caption=nome_cliente, use_container_width=True)
             else:
