@@ -1,16 +1,13 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 st.set_page_config(
     page_title="Barbearia - Painel do Vinicius",
-    page_icon="💈",
+    page_icon="📈",
     layout="wide"
 )
 
-# ========== ESTILO ==========
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
@@ -22,70 +19,47 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("💈 Painel da Barbearia - Versão Vinicius")
+st.title("🖔 Painel da Barbearia - Versão Vinicius")
+st.info("Navegue pelas páginas ao lado para acessar os dados da sua performance e dos seus clientes.")
 
-# ========== CARREGAR DADOS ==========
 @st.cache_data
 def carregar_base_vinicius():
-    escopos = ["https://www.googleapis.com/auth/spreadsheets"]
-    credenciais = Credentials.from_service_account_info(
-        st.secrets["GCP_SERVICE_ACCOUNT"], scopes=escopos
-    )
-    cliente = gspread.authorize(credenciais)
-    planilha = cliente.open_by_url(st.secrets["PLANILHA_URL"])
-    aba = planilha.worksheet("Base de Dados")
-    dados = aba.get_all_records()
-    df = pd.DataFrame(dados)
-    df["Data"] = pd.to_datetime(df["Data"])
+    url = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/export?format=csv&id=1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE&gid=0"
+    df = pd.read_csv(url, encoding="utf-8")
+    df.columns = df.columns.str.strip()  # Remove espaços extras
+    df["Data"] = pd.to_datetime(df["Data"], dayfirst=True)
     df["Valor"] = pd.to_numeric(df["Valor"].replace("R$", "", regex=True).str.replace(",", "."), errors="coerce")
     df = df[df["Funcionário"] == "Vinicius"]
     return df
 
 df = carregar_base_vinicius()
 
-# ========== FILTRAR MÊS ATUAL E ANTERIOR ==========
+# Filtro por mês atual e anterior
 hoje = datetime.today()
 mes_atual = hoje.month
 ano_atual = hoje.year
 
+mes_anterior = mes_atual - 1 if mes_atual > 1 else 12
+ano_anterior = ano_atual if mes_atual > 1 else ano_atual - 1
+
 df_mes_atual = df[(df["Data"].dt.month == mes_atual) & (df["Data"].dt.year == ano_atual)]
-df_mes_anterior = df[(df["Data"].dt.month == (mes_atual - 1)) & (df["Data"].dt.year == ano_atual)]
+df_mes_anterior = df[(df["Data"].dt.month == mes_anterior) & (df["Data"].dt.year == ano_anterior)]
 
-# ========== CONTAR ATENDIMENTOS ==========
-def contar_atendimentos(df_raw):
-    df_raw = df_raw.copy()
-    corte_data = pd.to_datetime("2025-05-11")
-    antes = df_raw[df_raw["Data"] < corte_data]
-    depois = df_raw[df_raw["Data"] >= corte_data]
-    atend_antes = len(antes)
-    atend_depois = depois.drop_duplicates(subset=["Cliente", "Data"])
-    total = atend_antes + len(atend_depois)
-    return total
+# Receita líquida = 50% do valor bruto
+receita_atual = df_mes_atual["Valor"].sum() * 0.5
+receita_anterior = df_mes_anterior["Valor"].sum() * 0.5
 
-# ========== MÉTRICAS ==========
-atendimentos_atual = contar_atendimentos(df_mes_atual)
-atendimentos_anterior = contar_atendimentos(df_mes_anterior)
+atendimentos_atual = len(df_mes_atual)
+atendimentos_anterior = len(df_mes_anterior)
 
-receita_atual = df_mes_atual["Valor"].sum()
-receita_anterior = df_mes_anterior["Valor"].sum()
+# Cálculo de diferenças
+dif_receita = receita_atual - receita_anterior
+dif_percentual = (dif_receita / receita_anterior) * 100 if receita_anterior > 0 else 0
 
-def calc_variacao(valor_atual, valor_ant):
-    if valor_ant == 0:
-        return "—"
-    return f"{((valor_atual - valor_ant) / valor_ant) * 100:.1f}%"
+col1, col2, col3 = st.columns(3)
 
-var_atend = calc_variacao(atendimentos_atual, atendimentos_anterior)
-var_receita = calc_variacao(receita_atual, receita_anterior)
+col1.metric("Atendimentos no mês", atendimentos_atual, f"{atendimentos_atual - atendimentos_anterior:+}")
+col2.metric("Receita líquida (50%)", f"R$ {receita_atual:,.2f}", f"R$ {dif_receita:,.2f}")
+col3.metric("Variação (%)", f"{dif_percentual:.1f}%", delta_color="normal")
 
-# ========== EXIBIR ==========
-st.info("Navegue pelas páginas ao lado para acessar os dados da sua performance e dos seus clientes.")
-
-st.subheader("📊 Resumo do mês atual")
-
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("👥 Atendimentos no mês", atendimentos_atual, delta=var_atend)
-with col2:
-    st.metric("💰 Receita líquida no mês", f"R$ {receita_atual:,.2f}", delta=var_receita)
-
-st.success("Painel carregado com sucesso ✅")
+st.success("Painel carregado com dados reais do Vinicius ✅")
