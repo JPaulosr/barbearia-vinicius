@@ -1,5 +1,29 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
+import plotly.express as px
+
+# ========== SENHA ========== #
+SENHA_CORRETA = "vinicius2025"
+
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
+if not st.session_state["autenticado"]:
+    with st.form("form_login", clear_on_submit=True):
+        senha = st.text_input("🔐 Digite a senha para acessar:", type="password")
+        entrar = st.form_submit_button("Entrar")
+        if entrar:
+            if senha == SENHA_CORRETA:
+                st.session_state["autenticado"] = True
+                st.success("✅ Acesso liberado. Carregando painel...")
+                st.experimental_rerun()
+            else:
+                st.error("❌ Senha incorreta. Tente novamente.")
+    st.stop()
+    
+import streamlit as st
+import pandas as pd
 import plotly.express as px
 from unidecode import unidecode
 from io import BytesIO
