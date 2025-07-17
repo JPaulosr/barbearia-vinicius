@@ -1,69 +1,144 @@
+# Arquivo: 1_Resumo_Funcionario.py (versão exclusiva do Vinicius)
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
-from google.oauth2 import service_account
+from unidecode import unidecode
+from io import BytesIO
 import gspread
+from gspread_dataframe import get_as_dataframe
+from google.oauth2.service_account import Credentials
 
 st.set_page_config(layout="wide")
+st.title("🧑‍💼 Resumo Funcionário - Vinicius")
 
-# --- CONFIGURAÇÕES ---
-SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/edit?usp=sharing"
+# === CONFIGURAÇÃO GOOGLE SHEETS ===
+SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
+BASE_ABA = "Base de Dados"
 
-# --- CONEXÃO COM GOOGLE SHEETS ---
-@st.cache_data(ttl=600)
+@st.cache_resource
+def conectar_sheets():
+    info = st.secrets["GCP_SERVICE_ACCOUNT"]
+    escopo = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    credenciais = Credentials.from_service_account_info(info, scopes=escopo)
+    cliente = gspread.authorize(credenciais)
+    return cliente.open_by_key(SHEET_ID)
+
+@st.cache_data
 def carregar_dados():
-    credentials = service_account.Credentials.from_service_account_info(
-        st.secrets["GCP_SERVICE_ACCOUNT"], scopes=SCOPE
-    )
-    client = gspread.authorize(credentials)
-    spreadsheet = client.open_by_url(SPREADSHEET_URL)
-    worksheet = spreadsheet.worksheet("Base de Dados")
-    df = pd.DataFrame(worksheet.get_all_records())
-
-    # Padroniza nomes de colunas
-    df.columns = [col.strip() for col in df.columns]
-
-    # Garante que a coluna 'Funcionário' seja usada corretamente
-    col_funcionario = [col for col in df.columns if "funcion" in col.lower()][0]
-    df = df[df[col_funcionario] == "Vinicius"]
-
-    df["Data"] = pd.to_datetime(df["Data"], dayfirst=True)
-    df["Ano"] = df["Data"].dt.year
-    df["Mes"] = df["Data"].dt.month
-    df["Dia da Semana"] = df["Data"].dt.day_name()
-
+    planilha = conectar_sheets()
+    aba = planilha.worksheet(BASE_ABA)
+    df = get_as_dataframe(aba).dropna(how="all")
+    df.columns = [str(col).strip() for col in df.columns]
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+    df = df.dropna(subset=["Data"])
+    df["Ano"] = df["Data"].dt.year.astype(int)
     return df
 
 df = carregar_dados()
 
-# --- TÍTULO ---
-st.title("📊 Resumo Funcionário - Vinicius")
+@st.cache_data
+def carregar_despesas():
+    planilha = conectar_sheets()
+    aba_desp = planilha.worksheet("Despesas")
+    df_desp = get_as_dataframe(aba_desp).dropna(how="all")
+    df_desp.columns = [str(col).strip() for col in df_desp.columns]
+    df_desp["Data"] = pd.to_datetime(df_desp["Data"], errors="coerce")
+    df_desp = df_desp.dropna(subset=["Data"])
+    df_desp["Ano"] = df_desp["Data"].dt.year.astype(int)
+    return df_desp
 
-# --- RESUMO MENSAL ---
-st.subheader("📅 Receita Mensal por Mês e Ano")
-df_receita = df.copy()
-df_receita['DataLabel'] = pd.to_datetime(df_receita[['Ano', 'Mes']].assign(DAY=1)).dt.strftime('%b %Y')
-resumo = df_receita.groupby('DataLabel')['Valor'].sum().reset_index()
-resumo = resumo.sort_values('DataLabel', key=lambda x: pd.to_datetime(x, format='%b %Y'))
+df_despesas = carregar_despesas()
 
-fig = px.bar(resumo, x='DataLabel', y='Valor', text_auto=True, title="Receita por Mês")
-st.plotly_chart(fig, use_container_width=True)
+# === Dados fixos para Vinicius ===
+funcionario_escolhido = "Vinicius"
+anos = sorted(df[df["Funcionário"] == funcionario_escolhido]["Ano"].dropna().unique(), reverse=True)
+ano_escolhido = st.selectbox("🗕️ Filtrar por ano", anos)
 
-# --- ATENDIMENTOS POR DIA DA SEMANA ---
-st.subheader("📈 Atendimentos por Dia da Semana")
-dias = df['Dia da Semana'].value_counts().reindex(
-    ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo']
-).dropna()
+df_func = df[(df["Funcionário"] == funcionario_escolhido) & (df["Ano"] == ano_escolhido)].copy()
 
-fig2 = px.bar(dias, x=dias.index, y=dias.values, text_auto=True, title="Distribuição dos Atendimentos")
-fig2.update_layout(xaxis_title="Dia", yaxis_title="Quantidade", showlegend=False)
-st.plotly_chart(fig2, use_container_width=True)
+# Filtros por mês, dia, semana
+col_filtros = st.columns(3)
+meses_disponiveis = df_func["Data"].dt.month.unique()
+meses_disponiveis.sort()
+mes_filtro = col_filtros[0].selectbox("📆 Filtrar por mês", options=["Todos"] + list(meses_disponiveis))
+if mes_filtro != "Todos":
+    df_func = df_func[df_func["Data"].dt.month == mes_filtro]
 
-# --- TABELA DETALHADA ---
-st.subheader("📋 Detalhamento dos Atendimentos")
-st.dataframe(
-    df[['Data', 'Cliente', 'Serviço', 'Valor', 'Combo']].sort_values('Data', ascending=False),
-    use_container_width=True
-)
+dias_disponiveis = df_func["Data"].dt.day.unique()
+dias_disponiveis.sort()
+dia_filtro = col_filtros[1].selectbox("📅 Filtrar por dia", options=["Todos"] + list(dias_disponiveis))
+if dia_filtro != "Todos":
+    df_func = df_func[df_func["Data"].dt.day == dia_filtro]
+
+df_func["Semana"] = df_func["Data"].dt.isocalendar().week
+semanas_disponiveis = df_func["Semana"].unique().tolist()
+semanas_disponiveis.sort()
+semana_filtro = col_filtros[2].selectbox("🗓️ Filtrar por semana", options=["Todas"] + list(semanas_disponiveis))
+if semana_filtro != "Todas":
+    df_func = df_func[df_func["Semana"] == semana_filtro]
+
+# === Filtro por tipo de serviço ===
+tipos_servico = df_func["Serviço"].dropna().unique().tolist()
+tipo_selecionado = st.multiselect("Filtrar por tipo de serviço", tipos_servico)
+if tipo_selecionado:
+    df_func = df_func[df_func["Serviço"].isin(tipo_selecionado)]
+
+# === KPIs
+st.subheader("📌 Insights do Funcionário")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🔢 Total de atendimentos", df_func.shape[0])
+col2.metric("👥 Clientes únicos", df_func["Cliente"].nunique())
+col3.metric("💰 Receita total", f"R$ {df_func['Valor'].sum():,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
+col4.metric("🎫 Ticket médio", f"R$ {df_func['Valor'].mean():,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
+
+# === Gráficos principais
+# 1. Atendimentos por dia da semana
+st.markdown("### 📆 Atendimentos por dia da semana")
+dias_semana = {0: "Seg", 1: "Ter", 2: "Qua", 3: "Qui", 4: "Sex", 5: "Sáb", 6: "Dom"}
+df_func["DiaSemana"] = df_func["Data"].dt.dayofweek.map(dias_semana)
+grafico_semana = df_func.groupby("DiaSemana").size().reset_index(name="Qtd Atendimentos")
+grafico_semana = grafico_semana.sort_values("DiaSemana", key=lambda x: x.map(dias_semana))
+st.plotly_chart(px.bar(grafico_semana, x="DiaSemana", y="Qtd Atendimentos", text_auto=True, template="plotly_white"), use_container_width=True)
+
+# 2. Receita mensal
+st.subheader("📊 Receita Mensal")
+meses_pt = {1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun", 7: "Jul", 8: "Ago", 9: "Set", 10: "Out", 11: "Nov", 12: "Dez"}
+df_func["MesNum"] = df_func["Data"].dt.month
+df_func["MesNome"] = df_func["MesNum"].map(meses_pt) + df_func["Data"].dt.strftime(" %Y")
+receita_mensal = df_func.groupby(["MesNum", "MesNome"])["Valor"].sum().reset_index()
+receita_mensal = receita_mensal.sort_values("MesNum")
+receita_mensal["Valor Formatado"] = receita_mensal["Valor"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
+
+fig_receita = px.bar(receita_mensal, x="MesNome", y="Valor", text="Valor Formatado", template="plotly_white")
+fig_receita.update_traces(textposition="outside", cliponaxis=False)
+st.plotly_chart(fig_receita, use_container_width=True)
+
+# 3. Receita real vs comissão
+comissao_real = df_despesas[
+    (df_despesas["Prestador"] == "Vinicius") &
+    (df_despesas["Descrição"].str.contains("comissão", case=False, na=False)) &
+    (df_despesas["Ano"] == ano_escolhido)
+]["Valor"].sum()
+
+bruto = df_func["Valor"].sum()
+receita_liquida = comissao_real
+salao_ficou = bruto - comissao_real
+
+comparativo = pd.DataFrame({
+    "Tipo": ["Receita Bruta", "Receita (comissão real)", "Lucro para o salão"],
+    "Valor": [bruto, receita_liquida, salao_ficou]
+})
+comparativo["Valor Formatado"] = comparativo["Valor"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
+st.subheader("💸 Comparativo da Receita")
+st.dataframe(comparativo[["Tipo", "Valor Formatado"]], use_container_width=True)
+
+# Histórico
+st.subheader("🗒️ Histórico de Atendimentos")
+st.dataframe(df_func.sort_values("Data", ascending=False), use_container_width=True)
+
+# Exportação
+st.subheader("📄 Exportar dados")
+buffer = BytesIO()
+df_func.to_excel(buffer, index=False, sheet_name="Filtrado", engine="openpyxl")
+st.download_button("Baixar Excel com dados filtrados", data=buffer.getvalue(), file_name="dados_vinicius.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
