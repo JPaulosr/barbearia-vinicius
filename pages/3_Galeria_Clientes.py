@@ -1,15 +1,10 @@
 import streamlit as st
 import pandas as pd
 import requests
-from PIL import Image
-from io import BytesIO
 import gspread
 from google.oauth2.service_account import Credentials
 
-st.set_page_config(page_title="Galeria de Clientes", layout="wide")
-
-# URL da imagem padrão
-LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
+st.set_page_config(page_title="Validação de Imagens", layout="wide")
 
 # Dados da planilha
 SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
@@ -28,56 +23,26 @@ def carregar_dados():
     df['Cliente'] = df['Cliente'].astype(str)
     return df
 
-def carregar_imagem(url):
+def verificar_imagem(url):
+    if not url or url.strip() == "" or url.lower() == "nan":
+        return "⚠️ Vazio"
     try:
-        response = requests.get(url, timeout=5)
-        return Image.open(BytesIO(response.content))
+        response = requests.head(url, timeout=5)
+        if response.status_code == 200:
+            return "✅ OK"
+        else:
+            return f"❌ {response.status_code}"
     except:
-        return None
+        return "❌ Erro"
 
-# Carrega dados
 df = carregar_dados()
-df = df[df['Status'].str.lower() == 'ativo']  # só ativos
-df = df[df['Cliente'].notna()]  # remove nulos
-df['Cliente'] = df['Cliente'].astype(str).str.strip()
-df = df[df['Cliente'] != ""]  # remove vazios
+df = df[df['Status'].str.lower() == 'ativo']
 
-st.title("🧑‍🦱 Galeria de Clientes")
+st.title("🔍 Verificação de Links de Imagem (Cloudinary)")
 
-# Filtro por nome
-clientes = sorted(df['Cliente'].unique())
-cliente_selecionado = st.selectbox("Filtrar por cliente:", options=['Todos'] + clientes)
-if cliente_selecionado != 'Todos':
-    df = df[df['Cliente'] == cliente_selecionado]
+# Verifica as imagens
+st.info("Verificando status das imagens, aguarde...")
+df['Status da Imagem'] = df['Foto'].apply(verificar_imagem)
 
-# Agrupa por inicial
-df['Inicial'] = df['Cliente'].str[0].str.upper()
-letras = sorted(df['Inicial'].unique())
-
-st.markdown("### 🔤 Navegação por letra")
-st.markdown(" | ".join(f"[{letra}](#{letra})" for letra in letras))
-
-if st.button("🟢 Expandir tudo"):
-    st.session_state['expandir_tudo'] = True
-if st.button("🔴 Recolher tudo"):
-    st.session_state['expandir_tudo'] = False
-
-# Exibição da galeria
-for letra in letras:
-    grupo = df[df['Inicial'] == letra]
-    with st.expander(f"{letra} ({len(grupo)} cliente{'s' if len(grupo) > 1 else ''})", expanded=st.session_state.get('expandir_tudo', False)):
-        cols = st.columns(3)
-        for i, (_, row) in enumerate(grupo.iterrows()):
-            nome_cliente = row['Cliente']
-            url_foto = row.get('Foto', '').strip()
-            imagem = carregar_imagem(url_foto) if url_foto.startswith("http") else None
-
-            with cols[i % 3]:
-                if imagem:
-                    st.image(imagem, caption=nome_cliente, use_container_width=True)
-                else:
-                    imagem_padrao = carregar_imagem(LOGO_PADRAO)
-                    if imagem_padrao:
-                        st.image(imagem_padrao, caption=f"{nome_cliente} (imagem padrão)", use_container_width=True)
-                    else:
-                        st.image(LOGO_PADRAO, caption=f"{nome_cliente} (logo direta)", use_container_width=True)
+# Exibe resultado
+st.dataframe(df[['Cliente', 'Foto', 'Status da Imagem']], use_container_width=True)
