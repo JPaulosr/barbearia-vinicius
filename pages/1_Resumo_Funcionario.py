@@ -1,71 +1,64 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from google.oauth2 import service_account
+import gspread
 
-st.set_page_config(layout="wide")
-st.markdown("<h1 style='text-align: center;'>🧑‍💼 Detalhes do Funcionário - Vinicius</h1>", unsafe_allow_html=True)
+st.set_page_config(layout="wide", page_title="Resumo Funcionário", page_icon="💼")
 
+# Carrega dados do Google Sheets com service account
 @st.cache_data
 def carregar_dados():
-    url_dados = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/export?format=csv&id=1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE&gid=0"
-    df = pd.read_csv(url_dados)
-    df["Data"] = pd.to_datetime(df["Data"], dayfirst=True, errors='coerce')
-    df = df[df["Profissional"] == "Vinicius"]
-    df = df[df["Status"] != "Desmarcado"]
-    df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce")
-    df = df.dropna(subset=["Valor", "Data"])
-    df["Ano"] = df["Data"].dt.year
-    df["Mes"] = df["Data"].dt.month
-    df["DiaSemana"] = df["Data"].dt.day_name().str[:3]
+    creds = service_account.Credentials.from_service_account_info(
+        st.secrets["GCP_SERVICE_ACCOUNT"],
+        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    )
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_url(st.secrets["PLANILHA_URL"])
+    worksheet = sh.worksheet("Base de Dados")
+    df = pd.DataFrame(worksheet.get_all_records())
     return df
 
 df = carregar_dados()
 
-# Filtros
-col1, col2, col3, col4 = st.columns(4)
-anos = sorted(df['Ano'].unique(), reverse=True)
-meses = ['Todos'] + list(range(1, 13))
-dias_semana = ['Todas'] + list(df['DiaSemana'].unique())
+# Filtra apenas atendimentos do Vinicius
+df = df[df["Profissional"] == "Vinicius"]
 
-ano = col1.selectbox("📅 Filtrar por ano", anos)
-mes = col2.selectbox("📅 Filtrar por mês", meses)
-dia_semana = col3.selectbox("📅 Filtrar por dia", dias_semana)
+# Formata data
+df["Data"] = pd.to_datetime(df["Data"], dayfirst=True, errors="coerce")
+df = df.dropna(subset=["Data"])
 
-df_filtrado = df[df['Ano'] == ano]
-if mes != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['Mes'] == mes]
-if dia_semana != 'Todas':
-    df_filtrado = df_filtrado[df_filtrado['DiaSemana'] == dia_semana]
+# Extrai ano e mês
+df["Ano"] = df["Data"].dt.year
+df["Mes"] = df["Data"].dt.month
+df["DiaSemana"] = df["Data"].dt.day_name(locale='pt_BR')
 
-# KPIs
-col1, col2, col3 = st.columns(3)
-col1.metric("📅 Total de atendimentos", len(df_filtrado))
-col2.metric("🧑‍🤝‍🧑 Clientes únicos", df_filtrado["Cliente"].nunique())
-col3.metric("💰 Receita (50%)", f"R$ {df_filtrado['Valor'].sum() * 0.5:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+# 🔹 Gráfico: Atendimentos por Dia da Semana (Total)
+st.markdown("### 📅 Atendimentos por dia da semana")
+dias_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+df["DiaSemana"] = pd.Categorical(df["DiaSemana"], categories=dias_semana, ordered=True)
 
-# Gráfico: Atendimentos por Dia da Semana (dados reais)
-st.markdown("### 🗓️ Atendimentos por dia da semana")
-dias_ordenados = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-df_semana = df_filtrado.copy()
-df_semana['DiaSemana'] = pd.Categorical(df_semana['DiaSemana'], categories=dias_ordenados, ordered=True)
-grafico_semana = df_semana['DiaSemana'].value_counts().sort_index().reset_index()
-grafico_semana.columns = ['DiaSemana', 'Qtd Atendimentos']
-fig_dia_semana = px.bar(grafico_semana, x='DiaSemana', y='Qtd Atendimentos',
-                        text='Qtd Atendimentos', color_discrete_sequence=['#7f7fff'])
-fig_dia_semana.update_layout(xaxis_title="DiaSemana", yaxis_title="Qtd Atendimentos", template="plotly_dark")
-st.plotly_chart(fig_dia_semana, use_container_width=True)
+df_dia = df["DiaSemana"].value_counts().sort_index().reset_index()
+df_dia.columns = ["DiaSemana", "Qtd Atendimentos"]
 
-# Receita por Mês
-st.markdown("### 📊 Receita Mensal por Mês e Ano")
-df_receita = df_filtrado.groupby(['Ano', 'Mes'])['Valor'].sum().reset_index()
-df_receita['DataLabel'] = pd.to_datetime(df_receita[['Ano', 'Mes']].assign(DAY=1), errors='coerce')
-df_receita = df_receita.dropna(subset=["DataLabel"])
-df_receita['Valor'] = df_receita['Valor'] * 0.5
-fig_receita = px.bar(df_receita.sort_values("DataLabel"),
-                     x="DataLabel", y="Valor",
-                     text_auto='.2s',
-                     labels={"Valor": "Receita (R$)", "DataLabel": "Mês"},
-                     color_discrete_sequence=["skyblue"])
-fig_receita.update_layout(template="plotly_dark")
-st.plotly_chart(fig_receita, use_container_width=True)
+fig = px.bar(df_dia, x="DiaSemana", y="Qtd Atendimentos", text="Qtd Atendimentos",
+             color_discrete_sequence=["#636EFA"])
+fig.update_layout(xaxis_title="Dia da Semana", yaxis_title="Qtd Atendimentos")
+st.plotly_chart(fig, use_container_width=True)
+
+# 🔹 Receita mensal por mês e ano (exibindo 50% apenas)
+st.markdown("### 📊 Receita Mensal por Mês e Ano (comissão 50%)")
+df_receita = df.copy()
+df_receita["Valor"] = pd.to_numeric(df_receita["Valor"], errors="coerce").fillna(0)
+df_receita["Valor50"] = df_receita["Valor"] * 0.5
+
+df_agrupado = df_receita.groupby(["Ano", "Mes"], as_index=False)["Valor50"].sum()
+df_agrupado["DataLabel"] = pd.to_datetime(df_agrupado[["Ano", "Mes"]].assign(DAY=1), errors="coerce")
+df_agrupado = df_agrupado.sort_values("DataLabel")
+
+fig2 = px.bar(df_agrupado, x="DataLabel", y="Valor50", text_auto='.2s',
+              labels={"DataLabel": "Mês", "Valor50": "Receita (50%)"},
+              color_discrete_sequence=["#82C0FF"])
+fig2.update_layout(xaxis_title="Mês", yaxis_title="R$", showlegend=False)
+fig2.update_traces(texttemplate="R$ %{y:.2f}")
+st.plotly_chart(fig2, use_container_width=True)
