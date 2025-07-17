@@ -35,43 +35,44 @@ def carregar_imagem(url):
     except:
         return None
 
-# Carrega dados da planilha
+# Carrega dados
 df = carregar_dados()
-df = df[df['Status'] == 'Ativo']  # apenas clientes ativos
+df = df[df['Status'].str.lower() == 'ativo']  # só ativos
+df = df[df['Cliente'].notna()]  # remove nulos
+df['Cliente'] = df['Cliente'].astype(str).str.strip()
+df = df[df['Cliente'] != ""]  # remove vazios
 
 st.title("🧑‍🦱 Galeria de Clientes")
 
-# Filtro por cliente
-clientes = df['Cliente'].dropna().unique()
-cliente_selecionado = st.selectbox("Filtrar por cliente:", options=['Todos'] + sorted(clientes.tolist()))
+# Filtro por nome
+clientes = sorted(df['Cliente'].unique())
+cliente_selecionado = st.selectbox("Filtrar por cliente:", options=['Todos'] + clientes)
 if cliente_selecionado != 'Todos':
     df = df[df['Cliente'] == cliente_selecionado]
 
-# Navegação por letra
+# Agrupa por inicial
 df['Inicial'] = df['Cliente'].str[0].str.upper()
 letras = sorted(df['Inicial'].unique())
+
 st.markdown("### 🔤 Navegação por letra")
 st.markdown(" | ".join(f"[{letra}](#{letra})" for letra in letras))
 
-# Botões para expandir/recolher tudo
 if st.button("🟢 Expandir tudo"):
     st.session_state['expandir_tudo'] = True
 if st.button("🔴 Recolher tudo"):
     st.session_state['expandir_tudo'] = False
 
-# Exibição por letra
+# Exibição da galeria
 for letra in letras:
     grupo = df[df['Inicial'] == letra]
     with st.expander(f"{letra} ({len(grupo)} cliente{'s' if len(grupo) > 1 else ''})", expanded=st.session_state.get('expandir_tudo', False)):
-        cols = st.columns(3)  # layout em 3 colunas
+        cols = st.columns(3)
         for i, (_, row) in enumerate(grupo.iterrows()):
             nome_cliente = row['Cliente']
-            url_foto = row['Foto'].strip()
-
-            # Tenta carregar imagem do cliente
+            url_foto = row.get('Foto', '').strip()
             imagem = carregar_imagem(url_foto) if url_foto.startswith("http") else None
 
-            with cols[i % 3]:  # alterna entre as colunas
+            with cols[i % 3]:
                 if imagem:
                     st.image(imagem, caption=nome_cliente, use_container_width=True)
                 else:
@@ -79,4 +80,4 @@ for letra in letras:
                     if imagem_padrao:
                         st.image(imagem_padrao, caption=f"{nome_cliente} (imagem padrão)", use_container_width=True)
                     else:
-                        st.image(LOGO_PADRAO, caption=f"{nome_cliente} (logo direto)", use_container_width=True)
+                        st.image(LOGO_PADRAO, caption=f"{nome_cliente} (logo direta)", use_container_width=True)
