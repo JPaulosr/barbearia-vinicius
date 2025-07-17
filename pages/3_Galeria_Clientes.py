@@ -16,7 +16,7 @@ def carregar_imagem(url):
     except:
         return None
 
-# Função para verificar se a URL da imagem é válida
+# Função para verificar se a URL é válida
 def imagem_valida(url):
     if not url or str(url).strip().lower() in ["", "nan"]:
         return False
@@ -26,10 +26,11 @@ def imagem_valida(url):
     except:
         return False
 
-# Link da imagem padrão (logo salão)
-imagem_padrao = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
+# URL da imagem padrão do salão
+imagem_padrao_url = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
+imagem_padrao = carregar_imagem(imagem_padrao_url)
 
-# Carregamento da planilha
+# Carregar planilha
 @st.cache_data
 def carregar_dados():
     url = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/gviz/tq?tqx=out:csv&sheet=clientes_status"
@@ -37,7 +38,7 @@ def carregar_dados():
 
 df = carregar_dados()
 
-# Filtro de clientes por nome
+# Filtro de clientes
 clientes = sorted(df["Cliente"].dropna().unique())
 filtro_cliente = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes)
 
@@ -46,10 +47,11 @@ if filtro_cliente != "Todos":
 
 # Navegação por letra
 letras = sorted(set(str(nome)[0].upper() for nome in df["Cliente"] if isinstance(nome, str)))
-letras_html = " | ".join(f"<a href='#{letra}'>{letra}</a>" for letra in letras)
+letras_html = " ".join(f"<a href='#{letra}'>{letra}</a>" for letra in letras)
 st.markdown("### 🔤 Navegação por letra", unsafe_allow_html=True)
 st.markdown(letras_html, unsafe_allow_html=True)
 
+# Botões de controle
 col1, col2 = st.columns(2)
 with col1:
     if st.button("🟢 Expandir tudo"):
@@ -60,7 +62,7 @@ with col2:
 
 st.markdown("---")
 
-# Agrupar clientes por letra inicial
+# Agrupamento por letra
 clientes_ordenados = df.sort_values("Cliente")
 
 for letra in letras:
@@ -79,13 +81,10 @@ for letra in letras:
             nome_cliente = row["Cliente"]
             url_foto = str(row.get("Foto", "")).strip()
 
-            if imagem_valida(url_foto):
-                imagem = carregar_imagem(url_foto)
-            else:
-                # Se não for válida, pula o cliente
-                continue
+            # Carrega imagem válida ou padrão
+            imagem = carregar_imagem(url_foto) if imagem_valida(url_foto) else imagem_padrao
 
-            if imagem:
-                with colunas[idx % 4]:
-                    st.image(imagem, caption=nome_cliente, use_container_width=True)
-                idx += 1
+            with colunas[idx % 4]:
+                st.image(imagem, caption=nome_cliente, use_container_width=True)
+
+            idx += 1
