@@ -9,7 +9,7 @@ from PIL import Image
 from io import BytesIO
 
 st.set_page_config(layout="wide")
-st.title("🏆 Top 10 Clientes - Vinicius")
+st.title("🏆 Top 10 Clientes por Funcionário")
 
 SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
 BASE_ABA = "Base de Dados"
@@ -43,54 +43,62 @@ def carregar_fotos_clientes():
     except:
         return {}
 
-# Carregamento
+# Função para gerar ranking por funcionário
+def gerar_ranking_por_funcionario(df, funcionario, fotos_clientes):
+    df_f = df[df["Funcionário"] == funcionario].copy()
+    df_f = df_f.groupby(["Cliente", "Data"]).agg({"Valor": "sum"}).reset_index()
+    soma_valores = df_f.groupby("Cliente")["Valor"].sum().reset_index(name="Total_Gasto")
+    atendimentos_por_dia = df_f.groupby("Cliente")["Data"].nunique().reset_index(name="Qtd_Atendimentos")
+    ranking = pd.merge(soma_valores, atendimentos_por_dia, on="Cliente")
+
+    nomes_invalidos = ["boliviano", "brasileiro", "menino", "cliente", "moicano", "morador", "menina"]
+    ranking = ranking[~ranking["Cliente"].str.lower().isin(nomes_invalidos)]
+    ranking = ranking[~ranking["Cliente"].str.lower().str.contains("sem nome|desconhecido|teste")]
+    ranking = ranking.sort_values("Total_Gasto", ascending=False).reset_index(drop=True)
+    return ranking.head(10)
+
+# Carregar dados e fotos
 df = carregar_dados()
-df = df[df["Funcionário"] == "Vinicius"].copy()
 fotos_clientes = carregar_fotos_clientes()
 
-# Agrupar por Cliente + Data (1 atendimento por dia)
-df_agrupado = df.groupby(["Cliente", "Data"]).agg({
-    "Valor": "sum"
-}).reset_index()
+col1, col2 = st.columns(2)
 
-# Soma total por cliente
-soma_valores = df_agrupado.groupby("Cliente")["Valor"].sum().reset_index(name="Total_Gasto")
-atendimentos_por_dia = df_agrupado.groupby("Cliente")["Data"].nunique().reset_index(name="Qtd_Atendimentos")
-ranking = pd.merge(soma_valores, atendimentos_por_dia, on="Cliente")
+with col1:
+    st.subheader("👑 Top 10 - JPaulo")
+    top_jpaulo = gerar_ranking_por_funcionario(df, "JPaulo", fotos_clientes)
+    for i, row in top_jpaulo.iterrows():
+        cliente = row["Cliente"]
+        qtd = row["Qtd_Atendimentos"]
+        foto_url = fotos_clientes.get(cliente, "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png")
+        c1, c2, c3 = st.columns([1, 2, 10])
+        with c1:
+            st.markdown("🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"#{i+1}")
+        with c2:
+            try:
+                response = requests.get(foto_url)
+                img = Image.open(BytesIO(response.content))
+                st.image(img, width=60)
+            except:
+                st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=60)
+        with c3:
+            st.markdown(f"**{cliente}** — {qtd} atendimentos")
 
-# Remover nomes genéricos e bolivianos
-nomes_invalidos = ["boliviano", "brasileiro", "menino", "cliente", "moicano", "morador", "menina"]
-ranking = ranking[~ranking["Cliente"].str.lower().isin(nomes_invalidos)]
-ranking = ranking[~ranking["Cliente"].str.lower().str.contains("sem nome|desconhecido|teste")]
-
-# Ranking por valor total gasto
-ranking = ranking.sort_values("Total_Gasto", ascending=False).reset_index(drop=True)
-top10 = ranking.head(10)
-
-# Exibir ranking
-st.markdown("### 🏅 Ranking dos 10 Clientes Mais Frequentes")
-
-for i, row in top10.iterrows():
-    cliente = row["Cliente"]
-    qtd = row["Qtd_Atendimentos"]
-    foto_url = fotos_clientes.get(cliente, "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png")
-
-    col1, col2, col3 = st.columns([1, 2, 10])
-    with col1:
-        if i == 0:
-            st.markdown("🥇", unsafe_allow_html=True)
-        elif i == 1:
-            st.markdown("🥈", unsafe_allow_html=True)
-        elif i == 2:
-            st.markdown("🥉", unsafe_allow_html=True)
-        else:
-            st.markdown(f"#{i+1}")
-    with col2:
-        try:
-            response = requests.get(foto_url)
-            img = Image.open(BytesIO(response.content))
-            st.image(img, width=60)
-        except:
-            st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=60)
-    with col3:
-        st.markdown(f"**{cliente}** — {qtd} atendimentos")
+with col2:
+    st.subheader("👑 Top 10 - Vinicius")
+    top_vinicius = gerar_ranking_por_funcionario(df, "Vinicius", fotos_clientes)
+    for i, row in top_vinicius.iterrows():
+        cliente = row["Cliente"]
+        qtd = row["Qtd_Atendimentos"]
+        foto_url = fotos_clientes.get(cliente, "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png")
+        c1, c2, c3 = st.columns([1, 2, 10])
+        with c1:
+            st.markdown("🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"#{i+1}")
+        with c2:
+            try:
+                response = requests.get(foto_url)
+                img = Image.open(BytesIO(response.content))
+                st.image(img, width=60)
+            except:
+                st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=60)
+        with c3:
+            st.markdown(f"**{cliente}** — {qtd} atendimentos")
