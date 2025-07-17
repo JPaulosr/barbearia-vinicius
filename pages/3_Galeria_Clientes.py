@@ -9,7 +9,10 @@ import cloudinary
 import cloudinary.uploader
 
 st.set_page_config(page_title="Galeria de Clientes", layout="wide")
-st.title("🌞 Galeria de Clientes")
+st.title("🧡 Galeria de Clientes")
+
+# Imagem padrão do salão
+LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
 
 # ========== CONFIGURAR CLOUDINARY ==========
 cloudinary.config(
@@ -17,9 +20,6 @@ cloudinary.config(
     api_key=st.secrets["CLOUDINARY"]["api_key"],
     api_secret=st.secrets["CLOUDINARY"]["api_secret"]
 )
-
-# ========== IMAGEM PADRÃO ==========
-LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
 
 # ========== CARREGAR DADOS ==========
 def carregar_dados():
@@ -37,7 +37,6 @@ def carregar_dados():
         st.error(f"Erro ao carregar dados: {e}")
         return pd.DataFrame(), None
 
-# ========== EXIBIR GALERIA ==========
 df, aba_clientes = carregar_dados()
 
 if df.empty or "Foto" not in df.columns:
@@ -62,9 +61,6 @@ else:
         st.markdown("### 🔡 Navegação por letra")
         st.markdown(" | ".join([f"[{letra}](#{letra.lower()})" for letra in letras_disponiveis]), unsafe_allow_html=True)
 
-        if "expand_all" not in st.session_state:
-            st.session_state["expand_all"] = True
-
         col1, col2 = st.columns([1, 1])
         with col1:
             if st.button("🟢 Expandir tudo"):
@@ -83,7 +79,7 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        # Tenta carregar imagem
+                        # ========== CARREGAR IMAGEM COM FALLBACK ==========
                         try:
                             url_img = row["Foto"]
                             response = requests.get(url_img, timeout=5)
@@ -93,15 +89,18 @@ else:
                                 raise Exception("Imagem quebrada")
                         except:
                             try:
-                                img = Image.open(requests.get(LOGO_PADRAO, stream=True).raw)
+                                response = requests.get(LOGO_PADRAO, timeout=5)
+                                img = Image.open(BytesIO(response.content))
                             except:
                                 img = None
 
+                        # ========== EXIBIR ==========
                         if isinstance(img, Image.Image):
                             st.image(img, caption=row["Cliente"], use_container_width=True)
                         else:
                             st.warning(f"⚠️ Imagem inválida para {row['Cliente']}")
 
+                        # ========== AÇÕES ==========
                         with st.expander(f"🛠 Ações para {row['Cliente']}"):
                             if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
                                 try:
@@ -115,7 +114,7 @@ else:
                                         nome_img = row["Foto"].split("/")[-1].split(".")[0]
                                         public_id = f"Fotos clientes/{nome_img}"
                                         cloudinary.uploader.destroy(public_id)
-                                        st.success("✅ Imagem deletada do Cloudinary.")
+                                        st.success("✅ Imagem deletada do Cloudinary com sucesso.")
 
                                     st.experimental_rerun()
                                 except Exception as e:
