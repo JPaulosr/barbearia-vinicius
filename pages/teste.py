@@ -23,6 +23,15 @@ def carregar_base():
 # Carregar dados da planilha
 base = carregar_base()
 
+# Padronizar nome da coluna
+colunas_renomeadas = {col: col.strip().capitalize() for col in base.columns}
+base.rename(columns=colunas_renomeadas, inplace=True)
+
+# Garantir que coluna 'Profissional' exista
+if "Profissional" not in base.columns:
+    st.error("❌ Coluna 'Profissional' não encontrada na planilha.")
+    st.stop()
+
 # Filtrar somente atendimentos de Vinicius
 base_vini = base[base["Profissional"] == "Vinicius"].copy()
 
@@ -32,14 +41,14 @@ base_vini["Data"] = pd.to_datetime(base_vini["Data"], errors="coerce")
 base_vini = base_vini.dropna(subset=["Data", "Valor"])
 
 # Estimar comissão real recebida
-# Se tiver campo específico de comissão, usar diretamente
 if "Comissão" in base_vini.columns:
     base_vini["ComissaoRecebida"] = pd.to_numeric(base_vini["Comissão"], errors="coerce")
 else:
-    # Se valor tem casa decimal (ex: 24.40), assumir que foi maquininha e usar valor da coluna
     def calcular_comissao(valor):
-        if valor % 5 != 0 and not valor.is_integer():
-            return valor / 2  # Ainda assim 50%, mas valor já está com taxa
+        if pd.isna(valor):
+            return 0
+        if round(valor, 2) % 5 != 0 and not float(valor).is_integer():
+            return valor / 2  # valor já com desconto maquininha
         else:
             return valor * 0.5
     base_vini["ComissaoRecebida"] = base_vini["Valor"].apply(calcular_comissao)
