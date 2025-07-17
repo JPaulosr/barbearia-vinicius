@@ -1,19 +1,22 @@
 import streamlit as st
-import pandas as pd
-from datetime import datetime
-import plotly.express as px
 
-# ========== CONFIGURAÇÃO ========== #
-st.set_page_config(page_title="Painel Vinicius", layout="wide")
-st.title("💪 Painel da Barbearia - Versão Vinicius")
-
-# ========== AUTENTICAÇÃO POR SENHA ========== #
+# Senha definida
 SENHA_CORRETA = "vinicius2025"
 
-senha = st.text_input("🔐 Digite a senha para acessar:", type="password")
-if senha != SENHA_CORRETA:
-    st.warning("Acesso restrito. Insira a senha correta para continuar.")
-    st.stop()
+# Verifica se usuário já autenticou
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
+# Se ainda não autenticado, exibe campo de senha
+if not st.session_state["autenticado"]:
+    senha = st.text_input("🔐 Digite a senha para acessar:", type="password")
+    if senha == SENHA_CORRETA:
+        st.session_state["autenticado"] = True
+        st.experimental_rerun()
+    else:
+        st.warning("Acesso restrito. Insira a senha correta.")
+        st.stop()
+
 
 # ========== CABEÇALHO ========== #
 st.markdown("""
