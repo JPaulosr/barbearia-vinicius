@@ -9,7 +9,6 @@ from google.oauth2.service_account import Credentials
 st.set_page_config(layout="wide")
 st.title("🧑‍💼 Detalhes do Funcionário - Vinicius")
 
-# === CONFIGURAÇÃO GOOGLE SHEETS ===
 SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
 BASE_ABA = "Base de Dados"
 
@@ -50,14 +49,11 @@ df_despesas = carregar_despesas()
 funcionario_escolhido = "Vinicius"
 df = df[df["Funcionário"] == funcionario_escolhido]
 
-# === Filtro por ano ===
 anos = sorted(df["Ano"].dropna().unique().tolist(), reverse=True)
 ano_escolhido = st.selectbox("🗕️ Filtrar por ano", anos)
 
 df_func = df[df["Ano"] == ano_escolhido].copy()
 
-# A partir daqui, mantenha exatamente o mesmo código que você já usa,
-# pois todos os gráficos, filtros e análises usarão automaticamente apenas Vinicius.
-
-# Exemplo: filtros por mês, dia, semana, tipo de serviço...
-# KPIs, insights, gráficos, comparativos etc.
+# Aqui você pode continuar com os KPIs, gráficos e comparativos normalmente
+st.write("✅ Dados carregados para:", funcionario_escolhido)
+st.dataframe(df_func)
