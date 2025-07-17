@@ -12,3 +12,4 @@ gspread-dataframe
 Pillow
 requests
 google-auth
+cloudinary
