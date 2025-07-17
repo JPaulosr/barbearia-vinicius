@@ -3,10 +3,9 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(layout="wide")
-
 st.title("👨‍💼 Detalhes do Funcionário - Vinicius")
 
-# Função corrigida para carregar dados direto do Google Sheets (sem credenciais)
+# Função corrigida para carregar dados do Google Sheets via CSV (sem credenciais)
 @st.cache_data
 def carregar_dados_google_sheets(sheet_url, aba_nome):
     base_url = sheet_url.replace("/edit?usp=sharing", "")
@@ -14,14 +13,14 @@ def carregar_dados_google_sheets(sheet_url, aba_nome):
     df = pd.read_csv(url_csv)
     return df
 
-# URL da planilha principal
+# URL da planilha principal (conectada diretamente)
 sheet_url = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/edit?usp=sharing"
 df = carregar_dados_google_sheets(sheet_url, "Base de Dados")
 
-# Filtro apenas Vinicius
+# Filtra somente os dados do funcionário Vinicius
 df = df[df['Profissional'] == 'Vinicius']
 
-# Conversões de data
+# Conversão de datas e extração de partes
 if 'Data' in df.columns:
     df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
     df = df.dropna(subset=['Data'])
@@ -30,14 +29,14 @@ if 'Data' in df.columns:
     df['Dia'] = df['Data'].dt.day
     df['DiaSemana'] = df['Data'].dt.day_name().str[:3]
 
-# Filtros interativos com layout horizontal
+# Filtros interativos
 col1, col2, col3, col4 = st.columns(4)
 ano = col1.selectbox("📅 Filtrar por ano", options=sorted(df['Ano'].unique(), reverse=True))
-mes = col2.selectbox("📅 Filtrar por mês", options=['Todos'] + sorted(df['Mes'].unique().tolist()))
-dia = col3.selectbox("📅 Filtrar por dia", options=['Todos'] + sorted(df['Dia'].unique().tolist()))
-semana = col4.selectbox("📅 Filtrar por semana", options=['Todas'] + sorted(df['DiaSemana'].unique()))
+mes = col2.selectbox("📅 Filtrar por mês", options=['Todos'] + sorted(df['Mes'].unique()))
+dia = col3.selectbox("📅 Filtrar por dia", options=['Todos'] + sorted(df['Dia'].unique()))
+semana = col4.selectbox("📅 Filtrar por dia da semana", options=['Todas'] + sorted(df['DiaSemana'].unique()))
 
-# Aplicando filtros
+# Aplicação de filtros
 filtro = df[df['Ano'] == ano]
 if mes != 'Todos':
     filtro = filtro[filtro['Mes'] == mes]
@@ -51,7 +50,7 @@ col1, col2, col3, col4 = st.columns(4)
 col1.metric("🧾 Total de atendimentos", len(filtro))
 col2.metric("👥 Clientes únicos", filtro['Cliente'].nunique())
 col3.metric("💰 Receita total", f"R$ {filtro['Valor'].sum():,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
-media = filtro['Valor'].mean() if len(filtro) > 0 else 0
+media = filtro['Valor'].mean() if not filtro.empty else 0
 col4.metric("💳 Ticket médio", f"R$ {media:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
 
 # Dia com mais atendimentos
@@ -62,9 +61,11 @@ if not filtro.empty:
 
 # Atendimentos por dia da semana
 atend_semana = filtro['DiaSemana'].value_counts().reindex(['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'])
-st.subheader("📅 Atendimentos por dia da semana")
-fig1 = px.bar(x=atend_semana.index, y=atend_semana.values, labels={'x': 'DiaSemana', 'y': 'Qtd Atendimentos'}, text=atend_semana.values, height=400)
-fig1.update_layout(yaxis=dict(title='Atendimentos'), xaxis=dict(title='Dia da Semana'))
+st.subheader("📅 Atendimentos por Dia da Semana")
+fig1 = px.bar(x=atend_semana.index, y=atend_semana.values,
+              labels={'x': 'Dia da Semana', 'y': 'Quantidade'},
+              text=atend_semana.values, height=400)
+fig1.update_layout(yaxis_title='Atendimentos', xaxis_title='Dia da Semana')
 st.plotly_chart(fig1, use_container_width=True)
 
 # Receita mensal
