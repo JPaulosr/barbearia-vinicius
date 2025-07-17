@@ -40,11 +40,6 @@ def carregar_dados():
 # ========== EXIBIR GALERIA ==========
 df, aba_clientes = carregar_dados()
 
-# === DEBUG ===
-with st.expander("🔍 DEBUG"):
-    st.write("Colunas:", df.columns.tolist())
-    st.dataframe(df.head())
-
 if df.empty or "Foto" not in df.columns:
     st.info("Nenhuma imagem encontrada.")
 else:
@@ -85,17 +80,19 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        # === EXIBE IMAGEM (ou LOGO PADRÃO) ===
                         url_imagem = row["Foto"] if pd.notna(row["Foto"]) and "http" in row["Foto"] else LOGO_PADRAO
                         try:
                             response = requests.get(url_imagem)
                             img = Image.open(BytesIO(response.content))
                             st.image(img, caption=row["Cliente"], use_container_width=True)
                         except:
-                            st.image(LOGO_PADRAO, caption=f"{row['Cliente']} (imagem padrão)", use_container_width=True)
+                            nome_cliente = row.get("Cliente", "Sem Nome")
+                            if pd.isna(nome_cliente):
+                                nome_cliente = "Sem Nome"
+                            st.image(LOGO_PADRAO, caption=f"{nome_cliente} (imagem padrão)", use_container_width=True)
 
                         with st.expander(f"🛠 Ações para {row['Cliente']}"):
-                            if st.button(f"❌ Excluir imagem", key=f"excluir_{row['Cliente']}_{idx}"):
+                            if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
                                 try:
                                     cell = aba_clientes.find(str(row["Cliente"]))
                                     if cell:
@@ -113,7 +110,7 @@ else:
                                 except Exception as e:
                                     st.error(f"❌ Erro ao deletar imagem: {e}")
 
-                            nova_foto = st.text_input("🔄 Substituir link da imagem", key=f"edit_{row['Cliente']}_{idx}")
+                            nova_foto = st.text_input("🔄 Substituir link da imagem", key=f"edit_{idx}")
                             if nova_foto:
                                 try:
                                     cell = aba_clientes.find(str(row["Cliente"]))
