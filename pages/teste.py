@@ -37,8 +37,18 @@ coluna_prof = coluna_prof[0]
 # Filtrar somente atendimentos de Vinicius
 base_vini = base[base[coluna_prof] == "Vinicius"].copy()
 
-# Converter valores
+# Limpar e converter valores da coluna Valor
+base_vini["Valor"] = (
+    base_vini["Valor"]
+    .astype(str)
+    .str.replace("R$", "", regex=False)
+    .str.replace(".", "", regex=False)
+    .str.replace(",", ".", regex=False)
+    .str.strip()
+)
 base_vini["Valor"] = pd.to_numeric(base_vini["Valor"], errors="coerce")
+
+# Converter datas
 base_vini["Data"] = pd.to_datetime(base_vini["Data"], errors="coerce")
 base_vini = base_vini.dropna(subset=["Data", "Valor"])
 
@@ -49,10 +59,11 @@ else:
     def calcular_comissao(valor):
         if pd.isna(valor):
             return 0
-        if round(valor, 2) % 5 != 0 and not float(valor).is_integer():
-            return valor / 2  # valor já com desconto maquininha
+        if not float(valor).is_integer():
+            return valor / 2  # valor já com desconto da maquininha
         else:
             return valor * 0.5
+
     base_vini["ComissaoRecebida"] = base_vini["Valor"].apply(calcular_comissao)
 
 base_vini["Ano-Mês"] = base_vini["Data"].dt.to_period("M").astype(str)
