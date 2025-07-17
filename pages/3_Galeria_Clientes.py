@@ -1,48 +1,91 @@
 import streamlit as st
 import pandas as pd
 import requests
-import gspread
-from google.oauth2.service_account import Credentials
+from PIL import Image
+from io import BytesIO
 
-st.set_page_config(page_title="Validação de Imagens", layout="wide")
+st.set_page_config(layout="wide")
+st.markdown("<h1 style='text-align: center;'>🧑‍🎨 Galeria de Clientes</h1>", unsafe_allow_html=True)
 
-# Dados da planilha
-SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
-NOME_ABA = "clientes_status"
+# Função para carregar imagem via URL
+def carregar_imagem(url):
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            return Image.open(BytesIO(response.content))
+    except:
+        return None
 
+# Função para verificar se a URL da imagem é válida
+def imagem_valida(url):
+    if not url or str(url).strip().lower() in ["", "nan"]:
+        return False
+    try:
+        r = requests.head(url, timeout=5)
+        return r.status_code == 200
+    except:
+        return False
+
+# Link da imagem padrão (logo salão)
+imagem_padrao = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
+
+# Carregamento da planilha
 @st.cache_data
 def carregar_dados():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    service_account_info = dict(st.secrets["GCP_SERVICE_ACCOUNT"])
-    creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-    client = gspread.authorize(creds)
-    aba = client.open_by_key(SHEET_ID).worksheet(NOME_ABA)
-    data = aba.get_all_records()
-    df = pd.DataFrame(data)
-    df['Foto'] = df['Foto'].astype(str)
-    df['Cliente'] = df['Cliente'].astype(str)
-    return df
-
-def verificar_imagem(url):
-    if not url or url.strip() == "" or url.lower() == "nan":
-        return "⚠️ Vazio"
-    try:
-        response = requests.head(url, timeout=5)
-        if response.status_code == 200:
-            return "✅ OK"
-        else:
-            return f"❌ {response.status_code}"
-    except:
-        return "❌ Erro"
+    url = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/gviz/tq?tqx=out:csv&sheet=clientes_status"
+    return pd.read_csv(url)
 
 df = carregar_dados()
-df = df[df['Status'].str.lower() == 'ativo']
 
-st.title("🔍 Verificação de Links de Imagem (Cloudinary)")
+# Filtro de clientes por nome
+clientes = sorted(df["Cliente"].dropna().unique())
+filtro_cliente = st.selectbox("Filtrar por cliente:", ["Todos"] + clientes)
 
-# Verifica as imagens
-st.info("Verificando status das imagens, aguarde...")
-df['Status da Imagem'] = df['Foto'].apply(verificar_imagem)
+if filtro_cliente != "Todos":
+    df = df[df["Cliente"] == filtro_cliente]
 
-# Exibe resultado
-st.dataframe(df[['Cliente', 'Foto', 'Status da Imagem']], use_container_width=True)
+# Navegação por letra
+letras = sorted(set(str(nome)[0].upper() for nome in df["Cliente"] if isinstance(nome, str)))
+letras_html = " | ".join(f"<a href='#{letra}'>{letra}</a>" for letra in letras)
+st.markdown("### 🔤 Navegação por letra", unsafe_allow_html=True)
+st.markdown(letras_html, unsafe_allow_html=True)
+
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("🟢 Expandir tudo"):
+        st.session_state.expandir = True
+with col2:
+    if st.button("🔴 Recolher tudo"):
+        st.session_state.expandir = False
+
+st.markdown("---")
+
+# Agrupar clientes por letra inicial
+clientes_ordenados = df.sort_values("Cliente")
+
+for letra in letras:
+    grupo = clientes_ordenados[clientes_ordenados["Cliente"].str.upper().str.startswith(letra)]
+
+    if grupo.empty:
+        continue
+
+    with st.container():
+        st.markdown(f"<h3 id='{letra}'>{letra}</h3>", unsafe_allow_html=True)
+
+        colunas = st.columns(4)
+        idx = 0
+
+        for _, row in grupo.iterrows():
+            nome_cliente = row["Cliente"]
+            url_foto = str(row.get("Foto", "")).strip()
+
+            if imagem_valida(url_foto):
+                imagem = carregar_imagem(url_foto)
+            else:
+                # Se não for válida, pula o cliente
+                continue
+
+            if imagem:
+                with colunas[idx % 4]:
+                    st.image(imagem, caption=nome_cliente, use_container_width=True)
+                idx += 1
