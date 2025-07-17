@@ -2,16 +2,16 @@ import streamlit as st
 import pandas as pd
 import gspread
 import requests
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from io import BytesIO
 from google.oauth2.service_account import Credentials
 import cloudinary
 import cloudinary.uploader
 
 st.set_page_config(page_title="Galeria de Clientes", layout="wide")
-st.title("🧡 Galeria de Clientes")
+st.title("❤️ Galeria de Clientes")
 
-# Imagem padrão do salão
+# ========== LOGO PADRÃO ==========
 LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
 
 # ========== CONFIGURAR CLOUDINARY ==========
@@ -37,6 +37,7 @@ def carregar_dados():
         st.error(f"Erro ao carregar dados: {e}")
         return pd.DataFrame(), None
 
+# ========== EXIBIR GALERIA ==========
 df, aba_clientes = carregar_dados()
 
 if df.empty or "Foto" not in df.columns:
@@ -79,28 +80,23 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        # ========== CARREGAR IMAGEM COM FALLBACK ==========
+                        # Tenta carregar a imagem do cliente
                         try:
                             url_img = row["Foto"]
                             response = requests.get(url_img, timeout=5)
-                            if response.status_code == 200:
-                                img = Image.open(BytesIO(response.content))
-                            else:
-                                raise Exception("Imagem quebrada")
-                        except:
+                            img = Image.open(BytesIO(response.content))
+                        except (requests.exceptions.RequestException, UnidentifiedImageError, Exception):
                             try:
                                 response = requests.get(LOGO_PADRAO, timeout=5)
                                 img = Image.open(BytesIO(response.content))
                             except:
                                 img = None
 
-                        # ========== EXIBIR ==========
                         if isinstance(img, Image.Image):
                             st.image(img, caption=row["Cliente"], use_container_width=True)
                         else:
                             st.warning(f"⚠️ Imagem inválida para {row['Cliente']}")
 
-                        # ========== AÇÕES ==========
                         with st.expander(f"🛠 Ações para {row['Cliente']}"):
                             if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
                                 try:
