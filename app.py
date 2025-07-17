@@ -1,3 +1,8 @@
+import streamlit as st
+from datetime import datetime
+import pandas as pd
+import plotly.express as px
+
 # ========== CABEÇALHO ========== #
 st.set_page_config(page_title="Painel Vinicius", layout="wide")
 st.title("💪 Painel da Barbearia - Versão Vinicius")
