@@ -82,14 +82,16 @@ else:
                     with cols[i % 3]:
                         # === EXIBE IMAGEM (ou LOGO PADRÃO) ===
                         url_imagem = row["Foto"] if pd.notna(row["Foto"]) and "http" in row["Foto"] else LOGO_PADRAO
+                        nome_cliente = str(row.get("Cliente", "Sem nome"))
+
                         try:
                             response = requests.get(url_imagem)
                             img = Image.open(BytesIO(response.content))
-                            st.image(img, caption=row["Cliente"], use_container_width=True)
+                            st.image(img, caption=nome_cliente, use_container_width=True)
                         except:
-                            st.image(LOGO_PADRAO, caption=f"{row['Cliente']} (imagem padrão)", use_container_width=True)
+                            st.image(LOGO_PADRAO, caption=f"{nome_cliente} (imagem padrão)", use_container_width=True)
 
-                        with st.expander(f"🛠 Ações para {row['Cliente']}"):
+                        with st.expander(f"🛠 Ações para {nome_cliente}"):
                             if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
                                 try:
                                     cell = aba_clientes.find(str(row["Cliente"]))
