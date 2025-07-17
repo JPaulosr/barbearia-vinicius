@@ -95,7 +95,7 @@ col4.metric("🎫 Ticket médio (50%)", f"R$ {df_func['Valor'].mean() * 0.5:,.2f
 # === Dia com mais atendimentos (valor líquido - 50%)
 dia_top = (
     df_func.groupby("Data")
-    .agg(Qtd_Atendimentos=('Cliente', 'count'), Valor_Liquido=('Valor', lambda x: x.sum() * 0.5))
+    .agg(Qtd_Atendimentos=('Cliente', 'count'), Valor_Bruto=('Valor', 'sum'))
     .reset_index()
 )
 
@@ -103,7 +103,8 @@ if not dia_top.empty:
     dia_maior = dia_top.sort_values("Qtd_Atendimentos", ascending=False).iloc[0]
     data_formatada = dia_maior["Data"].strftime("%d/%m/%Y")
     qtd = int(dia_maior["Qtd_Atendimentos"])
-    valor_formatado = f"R$ {dia_maior['Valor_Liquido']:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
+    valor_liquido = dia_maior["Valor_Bruto"] * 0.5
+    valor_formatado = f"R$ {valor_liquido:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
     st.info(f"📅 Dia com mais atendimentos: {data_formatada} com {qtd} atendimentos — Valor recebido: {valor_formatado}")
 
 # === Gráfico: Atendimentos por dia da semana
