@@ -50,6 +50,12 @@ fotos_clientes = carregar_fotos_clientes()
 
 # Contar atendimentos por cliente
 ranking = df["Cliente"].value_counts().reset_index()
+
+# Remover nomes genéricos e bolivianos
+nomes_invalidos = ["boliviano", "brasileiro", "menino", "cliente", "moicano", "morador", "menina"]
+ranking = ranking[~ranking["Cliente"].str.lower().isin(nomes_invalidos)]
+ranking = ranking[~ranking["Cliente"].str.lower().str.contains("sem nome|desconhecido|teste")]
+
 ranking.columns = ["Cliente", "Qtd_Atendimentos"]
 top10 = ranking.head(10)
 
