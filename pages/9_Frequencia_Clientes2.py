@@ -44,6 +44,10 @@ def carregar_status():
 
 # === PRÉ-PROCESSAMENTO
 df = carregar_dados()
+
+# REMOVE ATENDIMENTOS DO JPAULO
+df = df[df["Profissional"] != "JPaulo"]
+
 df_status = carregar_status()
 clientes_validos = df_status[~df_status["Status"].isin(["Inativo", "Ignorado"])]["Cliente"].unique().tolist()
 df = df[df["Cliente"].isin(clientes_validos)]
