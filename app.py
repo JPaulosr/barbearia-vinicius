@@ -1,4 +1,3 @@
-
 # ========== CABEÇALHO ========== #
 st.set_page_config(page_title="Painel Vinicius", layout="wide")
 st.title("💪 Painel da Barbearia - Versão Vinicius")
