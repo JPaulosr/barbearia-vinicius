@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -10,7 +9,7 @@ st.set_page_config(page_title="Galeria de Clientes", layout="wide")
 # Imagem padrão
 LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
 
-# Simulando carregamento de dados (você pode substituir pela planilha do Google)
+# Simulando carregamento de dados
 df = pd.DataFrame({
     'Cliente': ['3'],
     'Link_Foto': [None]
@@ -30,7 +29,7 @@ letras = sorted(df['Inicial'].unique())
 st.markdown("### 🔤 Navegação por letra")
 st.markdown(" | ".join(f"[{letra}](#{letra})" for letra in letras))
 
-# Expandir tudo
+# Expandir ou recolher
 if st.button("🟢 Expandir tudo"):
     st.session_state['expandir_tudo'] = True
 if st.button("🔴 Recolher tudo"):
@@ -43,9 +42,12 @@ for letra in letras:
             nome_cliente = row['Cliente']
             url_imagem = row['Link_Foto']
 
-            try:
-                response = requests.get(url_imagem)
-                img = Image.open(BytesIO(response.content))
-                st.image(img, caption=str(nome_cliente), use_container_width=True)
-            except:
+            if url_imagem and isinstance(url_imagem, str) and url_imagem.startswith("http"):
+                try:
+                    response = requests.get(url_imagem)
+                    img = Image.open(BytesIO(response.content))
+                    st.image(img, caption=str(nome_cliente), use_container_width=True)
+                except Exception as e:
+                    st.image(LOGO_PADRAO, caption=f"{str(nome_cliente)} (erro na imagem, usando padrão)", use_container_width=True)
+            else:
                 st.image(LOGO_PADRAO, caption=f"{str(nome_cliente)} (imagem padrão)", use_container_width=True)
