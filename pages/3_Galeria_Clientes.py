@@ -9,10 +9,7 @@ import cloudinary
 import cloudinary.uploader
 
 st.set_page_config(page_title="Galeria de Clientes", layout="wide")
-st.title("❤️ Galeria de Clientes")
-
-# ========== LOGO PADRÃO ==========
-LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
+st.title("🌞 Galeria de Clientes")
 
 # ========== CONFIGURAR CLOUDINARY ==========
 cloudinary.config(
@@ -20,16 +17,6 @@ cloudinary.config(
     api_key=st.secrets["CLOUDINARY"]["api_key"],
     api_secret=st.secrets["CLOUDINARY"]["api_secret"]
 )
-
-# ========== FUNÇÃO PARA CARREGAR IMAGEM COM SEGURANÇA ==========
-def carregar_imagem_segura(url):
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200 and "image" in response.headers.get("Content-Type", ""):
-            return Image.open(BytesIO(response.content))
-    except Exception:
-        pass
-    return None
 
 # ========== CARREGAR DADOS ==========
 def carregar_dados():
@@ -64,6 +51,7 @@ else:
     if fotos_validas.empty:
         st.warning("Nenhuma imagem disponível para esse filtro.")
     else:
+        # Agrupamento e ordenação
         fotos_validas["Cliente"] = fotos_validas["Cliente"].astype(str)
         fotos_validas = fotos_validas.sort_values(by="Cliente", key=lambda x: x.str.lower())
         grupos = fotos_validas.groupby(fotos_validas["Cliente"].str[0].str.upper())
@@ -90,52 +78,16 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        # Carregar imagem com segurança
-                        img = carregar_imagem_segura(row["Foto"])
-                        if not isinstance(img, Image.Image):
-                            img = carregar_imagem_segura(LOGO_PADRAO)
-
-                        if isinstance(img, Image.Image):
+                        try:
+                            response = requests.get(row["Foto"])
+                            img = Image.open(BytesIO(response.content))
                             st.image(img, caption=row["Cliente"], use_container_width=True)
-                        else:
-                            st.warning(f"⚠️ Imagem inválida para {row['Cliente']}")
+                        except:
+                            st.error(f"Erro ao carregar imagem de {row['Cliente']}")
+                            continue
 
-                        # === AÇÕES ===
-                        if hasattr(st, "popover"):
-                            with st.popover(f"🛠 Ações para {row['Cliente']}", use_container_width=True):
-                                st.markdown(f"### Ações para **{row['Cliente']}**")
-
-                                if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
-                                    try:
-                                        cell = aba_clientes.find(str(row["Cliente"]))
-                                        if cell:
-                                            col_foto = df.columns.get_loc("Foto") + 1
-                                            aba_clientes.update_cell(cell.row, col_foto, "")
-                                            st.success("✅ Imagem removida da planilha.")
-
-                                        if "res.cloudinary.com" in row["Foto"]:
-                                            nome_img = row["Foto"].split("/")[-1].split(".")[0]
-                                            public_id = f"Fotos clientes/{nome_img}"
-                                            cloudinary.uploader.destroy(public_id)
-                                            st.success("✅ Imagem deletada do Cloudinary com sucesso.")
-
-                                        st.experimental_rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao deletar imagem: {e}")
-
-                                nova_foto = st.text_input("🔄 Substituir link da imagem", key=f"edit_{idx}")
-                                if nova_foto:
-                                    try:
-                                        cell = aba_clientes.find(str(row["Cliente"]))
-                                        if cell:
-                                            col_foto = df.columns.get_loc("Foto") + 1
-                                            aba_clientes.update_cell(cell.row, col_foto, nova_foto)
-                                            st.success("✅ Imagem substituída com sucesso.")
-                                            st.experimental_rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Erro ao substituir imagem: {e}")
-                        else:
-                            if st.button(f"❌ Excluir imagem de {row['Cliente']}", key=f"btn_excluir_{idx}"):
+                        with st.expander(f"🛠 Ações para {row['Cliente']}"):
+                            if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
                                 try:
                                     cell = aba_clientes.find(str(row["Cliente"]))
                                     if cell:
@@ -151,4 +103,16 @@ else:
 
                                     st.experimental_rerun()
                                 except Exception as e:
-                                    st.error(f"Erro ao deletar imagem: {e}")
+                                    st.error(f"❌ Erro ao deletar imagem: {e}")
+
+                            nova_foto = st.text_input("🔄 Substituir link da imagem", key=f"edit_{idx}")
+                            if nova_foto:
+                                try:
+                                    cell = aba_clientes.find(str(row["Cliente"]))
+                                    if cell:
+                                        col_foto = df.columns.get_loc("Foto") + 1
+                                        aba_clientes.update_cell(cell.row, col_foto, nova_foto)
+                                        st.success("✅ Imagem substituída com sucesso.")
+                                        st.experimental_rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erro ao substituir imagem: {e}")
