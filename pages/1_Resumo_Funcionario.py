@@ -115,16 +115,24 @@ grafico_semana = df_func.groupby("DiaSemana").size().reset_index(name="Qtd Atend
 grafico_semana = grafico_semana.sort_values("DiaSemana", key=lambda x: x.map(dias_semana))
 st.plotly_chart(px.bar(grafico_semana, x="DiaSemana", y="Qtd Atendimentos", text_auto=True, template="plotly_white"), use_container_width=True)
 
-# === Receita mensal
+# === Receita mensal (valores líquidos - 50%)
 st.subheader("📊 Receita Mensal")
 meses_pt = {1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun", 7: "Jul", 8: "Ago", 9: "Set", 10: "Out", 11: "Nov", 12: "Dez"}
 df_func["MesNum"] = df_func["Data"].dt.month
 df_func["MesNome"] = df_func["MesNum"].map(meses_pt) + df_func["Data"].dt.strftime(" %Y")
+
 receita_mensal = df_func.groupby(["MesNum", "MesNome"])["Valor"].sum().reset_index()
+receita_mensal["Valor"] = receita_mensal["Valor"] * 0.5  # aplicar 50%
 receita_mensal = receita_mensal.sort_values("MesNum")
 receita_mensal["Valor Formatado"] = receita_mensal["Valor"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
 
-fig_receita = px.bar(receita_mensal, x="MesNome", y="Valor", text="Valor Formatado", template="plotly_white")
+fig_receita = px.bar(
+    receita_mensal,
+    x="MesNome",
+    y="Valor",
+    text="Valor Formatado",
+    template="plotly_white"
+)
 fig_receita.update_traces(textposition="outside", cliponaxis=False)
 st.plotly_chart(fig_receita, use_container_width=True)
 
