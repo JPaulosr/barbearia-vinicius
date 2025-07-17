@@ -36,8 +36,13 @@ base_vini = base_vini.dropna(subset=["Data", "Valor"])
 if "Comissão" in base_vini.columns:
     base_vini["ComissaoRecebida"] = pd.to_numeric(base_vini["Comissão"], errors="coerce")
 else:
-    # Caso contrário, calcular como 50% do valor bruto
-    base_vini["ComissaoRecebida"] = base_vini["Valor"] * 0.5
+    # Se valor tem casa decimal (ex: 24.40), assumir que foi maquininha e usar valor da coluna
+    def calcular_comissao(valor):
+        if valor % 5 != 0 and not valor.is_integer():
+            return valor / 2  # Ainda assim 50%, mas valor já está com taxa
+        else:
+            return valor * 0.5
+    base_vini["ComissaoRecebida"] = base_vini["Valor"].apply(calcular_comissao)
 
 base_vini["Ano-Mês"] = base_vini["Data"].dt.to_period("M").astype(str)
 
