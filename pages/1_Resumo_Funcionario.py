@@ -95,7 +95,7 @@ col4.metric("🎫 Ticket médio (50%)", f"R$ {df_func['Valor'].mean() * 0.5:,.2f
 # === Dia com mais atendimentos (valor líquido - 50%)
 dia_top = (
     df_func.groupby("Data")
-    .agg(Qtd_Atendimentos=('Cliente', 'count'), Valor_Bruto=('Valor', 'sum'))
+    .agg(Qtd_Atendimentos=('Cliente', 'count'), Valor_Liquido=('Valor', lambda x: x.sum() * 0.5))
     .reset_index()
 )
 
@@ -103,8 +103,7 @@ if not dia_top.empty:
     dia_maior = dia_top.sort_values("Qtd_Atendimentos", ascending=False).iloc[0]
     data_formatada = dia_maior["Data"].strftime("%d/%m/%Y")
     qtd = int(dia_maior["Qtd_Atendimentos"])
-    valor_liquido = dia_maior["Valor_Bruto"] * 0.5  # 50%
-    valor_formatado = f"R$ {valor_liquido:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
+    valor_formatado = f"R$ {dia_maior['Valor_Liquido']:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
     st.info(f"📅 Dia com mais atendimentos: {data_formatada} com {qtd} atendimentos — Valor recebido: {valor_formatado}")
 
 # === Gráfico: Atendimentos por dia da semana
@@ -127,25 +126,6 @@ receita_mensal["Valor Formatado"] = receita_mensal["Valor"].apply(lambda x: f"R$
 fig_receita = px.bar(receita_mensal, x="MesNome", y="Valor", text="Valor Formatado", template="plotly_white")
 fig_receita.update_traces(textposition="outside", cliponaxis=False)
 st.plotly_chart(fig_receita, use_container_width=True)
-
-# === Comparativo real
-comissao_real = df_despesas[
-    (df_despesas["Prestador"] == "Vinicius") & 
-    (df_despesas["Descrição"].str.contains("comissão", case=False, na=False)) & 
-    (df_despesas["Ano"] == ano_escolhido)
-]["Valor"].sum()
-
-bruto = df_func["Valor"].sum()
-receita_liquida = comissao_real
-salao_ficou = bruto - comissao_real
-
-comparativo = pd.DataFrame({
-    "Tipo": ["Receita Bruta", "Receita (comissão real)", "Lucro para o salão"],
-    "Valor": [bruto, receita_liquida, salao_ficou]
-})
-comparativo["Valor Formatado"] = comparativo["Valor"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
-st.subheader("💸 Comparativo da Receita")
-st.dataframe(comparativo[["Tipo", "Valor Formatado"]], use_container_width=True)
 
 # === Histórico
 st.subheader("🗒️ Histórico de Atendimentos")
