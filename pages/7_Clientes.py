@@ -1,18 +1,17 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from gspread_dataframe import get_as_dataframe, set_with_dataframe
-from google.oauth2.service_account import Credentials
 import plotly.express as px
+import gspread
+from gspread_dataframe import get_as_dataframe
+from google.oauth2.service_account import Credentials
 
 st.set_page_config(layout="wide")
-st.title("🧬 Gestão de Clientes - Vinicius")
+st.title("🧍‍♂️ Clientes - Receita Total (Vinicius)")
 
 # === CONFIGURAÇÃO GOOGLE SHEETS ===
 SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
 BASE_ABA = "Base de Dados"
 STATUS_ABA = "clientes_status"
-STATUS_OPTIONS = ["Ativo", "Ignorado", "Inativo"]
 
 @st.cache_resource
 def conectar_sheets():
@@ -20,101 +19,126 @@ def conectar_sheets():
     escopo = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     credenciais = Credentials.from_service_account_info(info, scopes=escopo)
     cliente = gspread.authorize(credenciais)
-    planilha = cliente.open_by_key(SHEET_ID)
-    return planilha
+    return cliente.open_by_key(SHEET_ID)
 
-def carregar_base(planilha):
+@st.cache_data
+def carregar_dados():
+    planilha = conectar_sheets()
     aba = planilha.worksheet(BASE_ABA)
-    df = get_as_dataframe(aba, dtype=str).dropna(how="all")
+    df = get_as_dataframe(aba).dropna(how="all")
     df.columns = [col.strip() for col in df.columns]
     df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
     df = df.dropna(subset=["Data"])
+    df["Ano"] = df["Data"].dt.year.astype(int)
     return df
 
-def carregar_status(planilha):
+@st.cache_data
+def carregar_status():
     try:
+        planilha = conectar_sheets()
         aba = planilha.worksheet(STATUS_ABA)
         df_status = get_as_dataframe(aba).dropna(how="all")
-        return df_status
+        df_status.columns = [col.strip() for col in df_status.columns]
+        return df_status[["Cliente", "Status"]]
     except:
         return pd.DataFrame(columns=["Cliente", "Status"])
 
-def salvar_status(planilha, df_status_atualizado):
-    aba = planilha.worksheet(STATUS_ABA)
-    df_status_existente = get_as_dataframe(aba).dropna(how="all")
-    df_status_existente.columns = [str(c).strip() for c in df_status_existente.columns]
+df = carregar_dados()
 
-    if "Cliente" not in df_status_existente.columns or "Status" not in df_status_existente.columns:
-        st.error("A aba de status precisa conter colunas 'Cliente' e 'Status'.")
-        return
-
-    df_status_existente.set_index("Cliente", inplace=True)
-    df_status_atualizado.set_index("Cliente", inplace=True)
-    df_status_existente.update(df_status_atualizado)
-    df_status_existente.reset_index(inplace=True)
-
-    aba.clear()
-    set_with_dataframe(aba, df_status_existente)
-
-# === CARGA DE DADOS
-planilha = conectar_sheets()
-df = carregar_base(planilha)
-
-# ✅ FILTRAR APENAS CLIENTES ATENDIDOS POR VINICIUS
+# ✅ FILTRAR APENAS CLIENTES ATENDIDOS PELO VINICIUS
 df = df[df["Funcionário"] == "Vinicius"]
 
-df_clientes = pd.DataFrame({"Cliente": sorted(df["Cliente"].dropna().unique())})
-df_status = carregar_status(planilha)
+df_status = carregar_status()
 
-clientes_com_status = df_clientes.merge(df_status[["Cliente", "Status"]], on="Cliente", how="left")
-clientes_com_status["Status"] = clientes_com_status["Status"].fillna("Ativo")
+# === Contagem total de clientes únicos e por status ===
+clientes_unicos = df["Cliente"].nunique()
+contagem_status = df_status["Status"].value_counts().to_dict()
+ativos = contagem_status.get("Ativo", 0)
+ignorados = contagem_status.get("Ignorado", 0)
+inativos = contagem_status.get("Inativo", 0)
 
-st.subheader("📋 Lista de Clientes com Status")
-st.markdown("Você pode alterar o status de clientes inativos ou que não devem aparecer nos relatórios.")
+# === Exibição dos indicadores no topo ===
+st.markdown("### 📊 Indicadores Gerais")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("👥 Clientes únicos", clientes_unicos)
+col2.metric("✅ Ativos", ativos)
+col3.metric("🚫 Ignorados", ignorados)
+col4.metric("🛑 Inativos", inativos)
 
-busca = st.text_input("🔍 Buscar cliente por nome").strip().lower()
-clientes_filtrados = clientes_com_status[clientes_com_status["Cliente"].str.lower().str.contains(busca)] if busca else clientes_com_status
+# === Remove nomes genéricos ===
+nomes_ignorar = ["boliviano", "brasileiro", "menino", "menino boliviano"]
+normalizar = lambda s: str(s).lower().strip()
+df = df[~df["Cliente"].apply(lambda x: normalizar(x) in nomes_ignorar)]
 
-status_order = {"Ignorado": 0, "Inativo": 1, "Ativo": 2}
-clientes_filtrados["Ordem"] = clientes_filtrados["Status"].map(status_order)
-clientes_filtrados = clientes_filtrados.sort_values("Ordem")
+# === Agrupamento ===
+ranking = df.groupby("Cliente")["Valor"].sum().reset_index()
+ranking = ranking.sort_values(by="Valor", ascending=False)
+ranking["Valor Formatado"] = ranking["Valor"].apply(
+    lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
+)
 
-novo_status = []
-for i, row in clientes_filtrados.iterrows():
-    cor = "#ffcccc" if row["Status"] == "Ignorado" else "#fff2b2" if row["Status"] == "Inativo" else "#d8f8d8"
-    texto_cor = "#000000"
-    with st.container():
-        st.markdown(
-            f"""
-            <div style="background-color:{cor}; padding:15px; border-radius:10px; margin-bottom:10px">
-                <div style="font-size:17px; font-weight:bold; color:{texto_cor}; margin-bottom:5px">👤 {row['Cliente']}</div>
-                <div style="font-size:14px; color:{texto_cor}; margin-bottom:8px">Status de {row['Cliente']}:</div>
-            </div>
-            """, unsafe_allow_html=True
-        )
-        status = st.selectbox(
-            f"Status de {row['Cliente']}",
-            STATUS_OPTIONS,
-            index=STATUS_OPTIONS.index(row["Status"]),
-            key=f"status_{i}"
-        )
-        novo_status.append(status)
+# === Busca dinâmica ===
+st.subheader("🧾 Receita total por cliente")
+busca = st.text_input("🔎 Filtrar por nome").lower().strip()
 
-if st.button("📂 Salvar alterações"):
-    clientes_filtrados["Status"] = novo_status
-    atualizados = clientes_filtrados.set_index("Cliente")[["Status"]]
-    clientes_com_status.set_index("Cliente", inplace=True)
-    clientes_com_status.update(atualizados)
-    clientes_com_status.reset_index(inplace=True)
+if busca:
+    ranking_exibido = ranking[ranking["Cliente"].str.lower().str.contains(busca)]
+else:
+    ranking_exibido = ranking.copy()
 
-    df_para_salvar = clientes_com_status[["Cliente", "Status"]]
-    salvar_status(planilha, df_para_salvar)
-    st.success("Status atualizado com sucesso!")
+st.dataframe(ranking_exibido[["Cliente", "Valor Formatado"]], use_container_width=True)
 
-st.subheader("📈 Resumo por Status")
-resumo = clientes_com_status["Status"].value_counts().reset_index()
-resumo.columns = ["Status", "Qtd Clientes"]
-st.dataframe(resumo, use_container_width=True)
+# === Top 5 clientes ===
+st.subheader("🏆 Top 5 Clientes por Receita")
+top5 = ranking.head(5)
+fig_top = px.bar(
+    top5,
+    x="Cliente",
+    y="Valor",
+    text=top5["Valor"].apply(lambda x: f"R$ {x:,.0f}".replace(",", "v").replace(".", ",").replace("v", ".")),
+    labels={"Valor": "Receita (R$)"},
+    color="Cliente"
+)
+fig_top.update_traces(textposition="outside")
+fig_top.update_layout(showlegend=False, height=400, template="plotly_white")
+st.plotly_chart(fig_top, use_container_width=True)
 
-fig = px.pie(clientes_com_status, names="Status", title="Distribuição de Clientes por Status")
-st.plotly_chart(fig, use_container_width=True)
+# === Comparativo entre dois clientes ===
+st.subheader("⚖️ Comparar dois clientes")
+
+clientes_disponiveis = ranking["Cliente"].tolist()
+col1, col2 = st.columns(2)
+c1 = col1.selectbox("👤 Cliente 1", clientes_disponiveis)
+c2 = col2.selectbox("👤 Cliente 2", clientes_disponiveis, index=1 if len(clientes_disponiveis) > 1 else 0)
+
+df_c1 = df[df["Cliente"] == c1]
+df_c2 = df[df["Cliente"] == c2]
+
+def resumo_cliente(df_cliente):
+    total = df_cliente["Valor"].sum()
+    servicos = df_cliente["Serviço"].nunique()
+    media = df_cliente.groupby("Data")["Valor"].sum().mean()
+    servicos_detalhados = df_cliente["Serviço"].value_counts().rename("Quantidade")
+    return pd.Series({
+        "Total Receita": f"R$ {total:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."),
+        "Serviços Distintos": servicos,
+        "Tique Médio": f"R$ {media:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
+    }), servicos_detalhados
+
+resumo1, servicos1 = resumo_cliente(df_c1)
+resumo2, servicos2 = resumo_cliente(df_c2)
+
+resumo_geral = pd.concat([resumo1.rename(c1), resumo2.rename(c2)], axis=1)
+servicos_comparativo = pd.concat([servicos1.rename(c1), servicos2.rename(c2)], axis=1).fillna(0).astype(int)
+
+st.dataframe(resumo_geral, use_container_width=True)
+st.markdown("**Serviços Realizados por Tipo**")
+st.dataframe(servicos_comparativo, use_container_width=True)
+
+# === Navegar para detalhamento ===
+st.subheader("🔍 Ver detalhamento de um cliente")
+cliente_escolhido = st.selectbox("📌 Escolha um cliente", clientes_disponiveis)
+
+if st.button("➡ Ver detalhes"):
+    st.session_state["cliente"] = cliente_escolhido
+    st.switch_page("pages/2_DetalhesCliente.py")
