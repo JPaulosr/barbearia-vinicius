@@ -5,3 +5,10 @@ gspread
 oauth2client
 plotly
 matplotlib
+streamlit
+pandas
+gspread
+gspread-dataframe
+Pillow
+requests
+google-auth
