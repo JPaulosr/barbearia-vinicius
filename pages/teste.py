@@ -1,60 +1,67 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
 import plotly.express as px
+from google.oauth2.service_account import Credentials
+import gspread
 
-st.set_page_config(page_title="Comissões Recebidas", layout="wide")
+st.set_page_config(page_title="Comissões Recebidas - Vinicius", layout="wide")
 st.title("💸 Comissões Recebidas - Vinicius")
 
-# === Autenticar e carregar dados ===
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SHEET_URL = st.secrets["PLANILHA_URL"]
-
-@st.cache_resource
-
-def conectar_planilha():
-    creds = Credentials.from_service_account_info(
-        st.secrets["GCP_SERVICE_ACCOUNT"], scopes=SCOPES
-    )
-    client = gspread.authorize(creds)
-    planilha = client.open_by_url(SHEET_URL)
-    return planilha
-
+# Função para carregar a aba 'Despesas'
 @st.cache_data
 
 def carregar_despesas():
-    planilha = conectar_planilha()
+    escopos = ["https://www.googleapis.com/auth/spreadsheets"]
+    credenciais = Credentials.from_service_account_info(
+        st.secrets["GCP_SERVICE_ACCOUNT"], scopes=escopos
+    )
+    cliente = gspread.authorize(credenciais)
+    planilha = cliente.open_by_url(st.secrets["PLANILHA_URL"])
     aba = planilha.worksheet("Despesas")
     dados = aba.get_all_records()
-    df = pd.DataFrame(dados)
-    df["Data"] = pd.to_datetime(df["Data"], dayfirst=True, errors='coerce')
-    return df
+    return pd.DataFrame(dados)
 
-# === Processar dados ===
+# Carregar dados da planilha
 df_despesas = carregar_despesas()
-df_vinicius = df_despesas[df_despesas["Descricao"].str.contains("Vinicius", case=False, na=False)]
 
-if df_vinicius.empty:
-    st.warning("Nenhuma comissão encontrada para Vinicius.")
-    st.stop()
+# Verificação de coluna correta
+coluna_desc = None
+for col in df_despesas.columns:
+    if col.lower().strip() in ["descricao", "descrição"]:
+        coluna_desc = col
+        break
 
-# Agrupar por mês
-comissoes_mes = df_vinicius.copy()
-comissoes_mes["AnoMes"] = comissoes_mes["Data"].dt.to_period("M").astype(str)
-resumo = comissoes_mes.groupby("AnoMes")["Valor"].sum().reset_index()
-resumo = resumo.sort_values("AnoMes")
+if not coluna_desc:
+    st.error("Coluna de descrição não encontrada. Verifique se existe 'Descrição' ou 'Descricao'.")
+    st.write("Colunas disponíveis:", df_despesas.columns.tolist())
+else:
+    # Filtrar apenas comissões recebidas por Vinicius
+    df_vinicius = df_despesas[
+        df_despesas[coluna_desc].str.contains("vinicius", case=False, na=False)
+    ].copy()
 
-# === Exibir gráfico ===
-st.subheader("📊 Gráfico de Comissões Recebidas")
-fig = px.bar(resumo, x="AnoMes", y="Valor", text_auto=True,
-             labels={"AnoMes": "Mês", "Valor": "Valor Recebido (R$)"},
-             title="Comissões recebidas por mês")
-st.plotly_chart(fig, use_container_width=True)
+    if df_vinicius.empty:
+        st.warning("Nenhuma comissão encontrada para Vinicius.")
+    else:
+        # Converter coluna de data
+        if "Data" in df_vinicius.columns:
+            df_vinicius["Data"] = pd.to_datetime(df_vinicius["Data"], errors="coerce")
+            df_vinicius = df_vinicius.dropna(subset=["Data"])
+            df_vinicius["Ano-Mês"] = df_vinicius["Data"].dt.to_period("M").astype(str)
 
-# === Exibir tabela detalhada ===
-st.subheader("📋 Tabela de Comissões")
-st.dataframe(resumo.rename(columns={"AnoMes": "Mês", "Valor": "Total Recebido (R$)"}), use_container_width=True)
+        # Gráfico mensal
+        if "Valor" in df_vinicius.columns:
+            df_vinicius["Valor"] = pd.to_numeric(df_vinicius["Valor"], errors="coerce")
+            df_mensal = df_vinicius.groupby("Ano-Mês")["Valor"].sum().reset_index()
 
-# === Total acumulado ===
-st.metric("💰 Total Recebido:", f"R$ {resumo['Valor'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.subheader("📊 Gráfico de Comissões por Mês")
+            fig = px.bar(df_mensal, x="Ano-Mês", y="Valor", text_auto=True)
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.subheader("📋 Tabela Detalhada")
+            st.dataframe(df_vinicius[["Data", coluna_desc, "Valor"]].sort_values("Data", ascending=False), use_container_width=True)
+
+            total_pago = df_vinicius["Valor"].sum()
+            st.success(f"💰 Total de comissões recebidas: R$ {total_pago:,.2f}".replace(",", ".").replace(".", ",", 1))
+        else:
+            st.warning("Coluna 'Valor' não encontrada na planilha de despesas.")
