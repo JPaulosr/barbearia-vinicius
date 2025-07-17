@@ -1,64 +1,69 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 from google.oauth2 import service_account
 import gspread
 
-st.set_page_config(layout="wide", page_title="Resumo Funcionário", page_icon="💼")
+st.set_page_config(layout="wide")
 
-# Carrega dados do Google Sheets com service account
-@st.cache_data
+# --- CONFIGURAÇÕES ---
+SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/edit?usp=sharing"
+
+# --- CONEXÃO COM GOOGLE SHEETS ---
+@st.cache_data(ttl=600)
 def carregar_dados():
-    creds = service_account.Credentials.from_service_account_info(
-        st.secrets["GCP_SERVICE_ACCOUNT"],
-        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["GCP_SERVICE_ACCOUNT"], scopes=SCOPE
     )
-    gc = gspread.authorize(creds)
-    sh = gc.open_by_url(st.secrets["PLANILHA_URL"])
-    worksheet = sh.worksheet("Base de Dados")
+    client = gspread.authorize(credentials)
+    spreadsheet = client.open_by_url(SPREADSHEET_URL)
+    worksheet = spreadsheet.worksheet("Base de Dados")
     df = pd.DataFrame(worksheet.get_all_records())
+
+    # Padroniza nomes de colunas
+    df.columns = [col.strip() for col in df.columns]
+
+    # Garante que a coluna 'Funcionário' seja usada corretamente
+    col_funcionario = [col for col in df.columns if "funcion" in col.lower()][0]
+    df = df[df[col_funcionario] == "Vinicius"]
+
+    df["Data"] = pd.to_datetime(df["Data"], dayfirst=True)
+    df["Ano"] = df["Data"].dt.year
+    df["Mes"] = df["Data"].dt.month
+    df["Dia da Semana"] = df["Data"].dt.day_name()
+
     return df
 
 df = carregar_dados()
 
-# Filtra apenas atendimentos do Vinicius
-df = df[df["Profissional"] == "Vinicius"]
+# --- TÍTULO ---
+st.title("📊 Resumo Funcionário - Vinicius")
 
-# Formata data
-df["Data"] = pd.to_datetime(df["Data"], dayfirst=True, errors="coerce")
-df = df.dropna(subset=["Data"])
+# --- RESUMO MENSAL ---
+st.subheader("📅 Receita Mensal por Mês e Ano")
+df_receita = df.copy()
+df_receita['DataLabel'] = pd.to_datetime(df_receita[['Ano', 'Mes']].assign(DAY=1)).dt.strftime('%b %Y')
+resumo = df_receita.groupby('DataLabel')['Valor'].sum().reset_index()
+resumo = resumo.sort_values('DataLabel', key=lambda x: pd.to_datetime(x, format='%b %Y'))
 
-# Extrai ano e mês
-df["Ano"] = df["Data"].dt.year
-df["Mes"] = df["Data"].dt.month
-df["DiaSemana"] = df["Data"].dt.day_name(locale='pt_BR')
-
-# 🔹 Gráfico: Atendimentos por Dia da Semana (Total)
-st.markdown("### 📅 Atendimentos por dia da semana")
-dias_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-df["DiaSemana"] = pd.Categorical(df["DiaSemana"], categories=dias_semana, ordered=True)
-
-df_dia = df["DiaSemana"].value_counts().sort_index().reset_index()
-df_dia.columns = ["DiaSemana", "Qtd Atendimentos"]
-
-fig = px.bar(df_dia, x="DiaSemana", y="Qtd Atendimentos", text="Qtd Atendimentos",
-             color_discrete_sequence=["#636EFA"])
-fig.update_layout(xaxis_title="Dia da Semana", yaxis_title="Qtd Atendimentos")
+fig = px.bar(resumo, x='DataLabel', y='Valor', text_auto=True, title="Receita por Mês")
 st.plotly_chart(fig, use_container_width=True)
 
-# 🔹 Receita mensal por mês e ano (exibindo 50% apenas)
-st.markdown("### 📊 Receita Mensal por Mês e Ano (comissão 50%)")
-df_receita = df.copy()
-df_receita["Valor"] = pd.to_numeric(df_receita["Valor"], errors="coerce").fillna(0)
-df_receita["Valor50"] = df_receita["Valor"] * 0.5
+# --- ATENDIMENTOS POR DIA DA SEMANA ---
+st.subheader("📈 Atendimentos por Dia da Semana")
+dias = df['Dia da Semana'].value_counts().reindex(
+    ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo']
+).dropna()
 
-df_agrupado = df_receita.groupby(["Ano", "Mes"], as_index=False)["Valor50"].sum()
-df_agrupado["DataLabel"] = pd.to_datetime(df_agrupado[["Ano", "Mes"]].assign(DAY=1), errors="coerce")
-df_agrupado = df_agrupado.sort_values("DataLabel")
-
-fig2 = px.bar(df_agrupado, x="DataLabel", y="Valor50", text_auto='.2s',
-              labels={"DataLabel": "Mês", "Valor50": "Receita (50%)"},
-              color_discrete_sequence=["#82C0FF"])
-fig2.update_layout(xaxis_title="Mês", yaxis_title="R$", showlegend=False)
-fig2.update_traces(texttemplate="R$ %{y:.2f}")
+fig2 = px.bar(dias, x=dias.index, y=dias.values, text_auto=True, title="Distribuição dos Atendimentos")
+fig2.update_layout(xaxis_title="Dia", yaxis_title="Quantidade", showlegend=False)
 st.plotly_chart(fig2, use_container_width=True)
+
+# --- TABELA DETALHADA ---
+st.subheader("📋 Detalhamento dos Atendimentos")
+st.dataframe(
+    df[['Data', 'Cliente', 'Serviço', 'Valor', 'Combo']].sort_values('Data', ascending=False),
+    use_container_width=True
+)
