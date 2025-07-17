@@ -27,8 +27,8 @@ def carregar_imagem_segura(url):
         response = requests.get(url, timeout=5)
         if response.status_code == 200 and "image" in response.headers.get("Content-Type", ""):
             return Image.open(BytesIO(response.content))
-    except Exception:
-        pass
+    except Exception as e:
+        st.warning(f"Erro ao carregar imagem: {e}")
     return None
 
 # ========== CARREGAR DADOS ==========
@@ -90,15 +90,20 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        # Carregar imagem do cliente com segurança
+                        # Carregar imagem segura
                         img = carregar_imagem_segura(row["Foto"])
-                        if img is None:
+                        if not isinstance(img, Image.Image):
                             img = carregar_imagem_segura(LOGO_PADRAO)
 
                         if isinstance(img, Image.Image):
-                            st.image(img, caption=row["Cliente"], use_container_width=True)
+                            try:
+                                st.image(img, caption=row["Cliente"], use_container_width=True)
+                            except Exception as e:
+                                st.error(f"Erro ao exibir imagem de {row['Cliente']}: {e}")
+                                st.write("Tipo de img:", type(img))
                         else:
                             st.warning(f"⚠️ Imagem inválida para {row['Cliente']}")
+                            st.write("Tipo inválido:", type(img))
 
                         with st.expander(f"🛠 Ações para {row['Cliente']}"):
                             if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
