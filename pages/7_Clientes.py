@@ -6,7 +6,7 @@ from gspread_dataframe import get_as_dataframe
 from google.oauth2.service_account import Credentials
 
 st.set_page_config(layout="wide")
-st.title("🧍‍♂️ Clientes - Receita Total (Vinicius)")
+st.title("🧍‍♂️ Comissão - Clientes Atendidos por Vinicius")
 
 # === CONFIGURAÇÃO GOOGLE SHEETS ===
 SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
@@ -70,15 +70,16 @@ nomes_ignorar = ["boliviano", "brasileiro", "menino", "menino boliviano"]
 normalizar = lambda s: str(s).lower().strip()
 df = df[~df["Cliente"].apply(lambda x: normalizar(x) in nomes_ignorar)]
 
-# === Agrupamento ===
+# === Agrupamento com comissão de 50%
 ranking = df.groupby("Cliente")["Valor"].sum().reset_index()
+ranking["Valor"] = ranking["Valor"] * 0.5  # Vinicius recebe 50%
 ranking = ranking.sort_values(by="Valor", ascending=False)
 ranking["Valor Formatado"] = ranking["Valor"].apply(
     lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
 )
 
 # === Busca dinâmica ===
-st.subheader("🧾 Receita total por cliente")
+st.subheader("🧾 Comissão recebida por cliente (50%)")
 busca = st.text_input("🔎 Filtrar por nome").lower().strip()
 
 if busca:
@@ -89,14 +90,14 @@ else:
 st.dataframe(ranking_exibido[["Cliente", "Valor Formatado"]], use_container_width=True)
 
 # === Top 5 clientes ===
-st.subheader("🏆 Top 5 Clientes por Receita")
+st.subheader("🏆 Top 5 Clientes por Comissão")
 top5 = ranking.head(5)
 fig_top = px.bar(
     top5,
     x="Cliente",
     y="Valor",
     text=top5["Valor"].apply(lambda x: f"R$ {x:,.0f}".replace(",", "v").replace(".", ",").replace("v", ".")),
-    labels={"Valor": "Receita (R$)"},
+    labels={"Valor": "Comissão (R$)"},
     color="Cliente"
 )
 fig_top.update_traces(textposition="outside")
@@ -104,7 +105,7 @@ fig_top.update_layout(showlegend=False, height=400, template="plotly_white")
 st.plotly_chart(fig_top, use_container_width=True)
 
 # === Comparativo entre dois clientes ===
-st.subheader("⚖️ Comparar dois clientes")
+st.subheader("⚖️ Comparar comissão de dois clientes")
 
 clientes_disponiveis = ranking["Cliente"].tolist()
 col1, col2 = st.columns(2)
@@ -115,14 +116,14 @@ df_c1 = df[df["Cliente"] == c1]
 df_c2 = df[df["Cliente"] == c2]
 
 def resumo_cliente(df_cliente):
-    total = df_cliente["Valor"].sum()
+    total = df_cliente["Valor"].sum() * 0.5
     servicos = df_cliente["Serviço"].nunique()
-    media = df_cliente.groupby("Data")["Valor"].sum().mean()
+    media = df_cliente.groupby("Data")["Valor"].sum().mean() * 0.5
     servicos_detalhados = df_cliente["Serviço"].value_counts().rename("Quantidade")
     return pd.Series({
-        "Total Receita": f"R$ {total:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."),
+        "Comissão Total": f"R$ {total:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."),
         "Serviços Distintos": servicos,
-        "Tique Médio": f"R$ {media:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
+        "Tique Médio (50%)": f"R$ {media:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
     }), servicos_detalhados
 
 resumo1, servicos1 = resumo_cliente(df_c1)
