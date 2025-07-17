@@ -62,7 +62,6 @@ else:
         st.markdown("### 🔡 Navegação por letra")
         st.markdown(" | ".join([f"[{letra}](#{letra.lower()})" for letra in letras_disponiveis]), unsafe_allow_html=True)
 
-        # Inicializa a chave de sessão
         if "expand_all" not in st.session_state:
             st.session_state["expand_all"] = True
 
@@ -84,18 +83,24 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        # Carrega a imagem com fallback
+                        # Tenta carregar imagem
                         try:
                             url_img = row["Foto"]
                             response = requests.get(url_img, timeout=5)
                             if response.status_code == 200:
                                 img = Image.open(BytesIO(response.content))
                             else:
-                                raise Exception("Imagem inválida")
+                                raise Exception("Imagem quebrada")
                         except:
-                            img = Image.open(requests.get(LOGO_PADRAO, stream=True).raw)
+                            try:
+                                img = Image.open(requests.get(LOGO_PADRAO, stream=True).raw)
+                            except:
+                                img = None
 
-                        st.image(img, caption=row["Cliente"], use_container_width=True)
+                        if isinstance(img, Image.Image):
+                            st.image(img, caption=row["Cliente"], use_container_width=True)
+                        else:
+                            st.warning(f"⚠️ Imagem inválida para {row['Cliente']}")
 
                         with st.expander(f"🛠 Ações para {row['Cliente']}"):
                             if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
