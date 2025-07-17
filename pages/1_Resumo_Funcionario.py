@@ -1,89 +1,77 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
 
-st.set_page_config(page_title="Detalhes Funcionário", layout="wide")
-st.markdown("<h1>👨‍💼 Detalhes do Funcionário - Vinicius</h1>", unsafe_allow_html=True)
+st.set_page_config(layout="wide")
 
-# FUNÇÃO PARA CARREGAR DADOS DO GOOGLE SHEETS
+st.title("👨‍💼 Detalhes do Funcionário - Vinicius")
+
+# Função corrigida para carregar dados direto do Google Sheets (sem credenciais)
 @st.cache_data
 def carregar_dados_google_sheets(sheet_url, aba_nome):
-    escopo = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    credenciais = ServiceAccountCredentials.from_json_keyfile_name('credenciais.json', escopo)
-    cliente = gspread.authorize(credenciais)
-    planilha = cliente.open_by_url(sheet_url)
-    aba = planilha.worksheet(aba_nome)
-    dados = aba.get_all_records()
-    return pd.DataFrame(dados)
+    base_url = sheet_url.replace("/edit?usp=sharing", "")
+    url_csv = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_nome}"
+    df = pd.read_csv(url_csv)
+    return df
 
-# CARREGAR DADOS
-sheet_url = 'https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/edit?usp=sharing'
-df = carregar_dados_google_sheets(sheet_url, 'Base de Dados')
+# URL da planilha principal
+sheet_url = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/edit?usp=sharing"
+df = carregar_dados_google_sheets(sheet_url, "Base de Dados")
 
-# TRATAMENTO
-df['Data'] = pd.to_datetime(df['Data'], dayfirst=True)
-df = df[df['Funcionario'] == 'Vinicius']
+# Filtro apenas Vinicius
+df = df[df['Profissional'] == 'Vinicius']
 
-# SIDEBAR/FILTROS
-anos = sorted(df['Data'].dt.year.unique())
-ano = st.selectbox("📅 Filtrar por ano", anos)
+# Conversões de data
+if 'Data' in df.columns:
+    df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
+    df = df.dropna(subset=['Data'])
+    df['Ano'] = df['Data'].dt.year
+    df['Mes'] = df['Data'].dt.month
+    df['Dia'] = df['Data'].dt.day
+    df['DiaSemana'] = df['Data'].dt.day_name().str[:3]
 
-df_filtrado = df[df['Data'].dt.year == ano]
-
-mes = st.selectbox("📅 Filtrar por mês", ['Todos'] + sorted(df_filtrado['Data'].dt.month.unique().tolist()))
-if mes != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['Data'].dt.month == mes]
-
-dia = st.selectbox("📅 Filtrar por dia", ['Todos'] + sorted(df_filtrado['Data'].dt.day.unique().tolist()))
-if dia != 'Todos':
-    df_filtrado = df_filtrado[df_filtrado['Data'].dt.day == dia]
-
-semana = st.selectbox("📅 Filtrar por semana", ['Todas'] + sorted(df_filtrado['Data'].dt.isocalendar().week.unique().tolist()))
-if semana != 'Todas':
-    df_filtrado = df_filtrado[df_filtrado['Data'].dt.isocalendar().week == semana]
-
-tipos_servico = st.multiselect("💈 Filtrar por tipo de serviço", options=df_filtrado['Tipo'].unique())
-if tipos_servico:
-    df_filtrado = df_filtrado[df_filtrado['Tipo'].isin(tipos_servico)]
-
-# INSIGHTS
-total_atendimentos = df_filtrado.shape[0]
-clientes_unicos = df_filtrado['Cliente'].nunique()
-receita_total = df_filtrado['Valor'].sum()
-ticket_medio = receita_total / total_atendimentos if total_atendimentos > 0 else 0
-
+# Filtros interativos com layout horizontal
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("📊 Total de atendimentos", total_atendimentos)
-col2.metric("👥 Clientes únicos", clientes_unicos)
-col3.metric("💰 Receita total", f"R$ {receita_total:,.2f}".replace(".", ","))
-col4.metric("💳 Ticket médio", f"R$ {ticket_medio:,.2f}".replace(".", ","))
+ano = col1.selectbox("📅 Filtrar por ano", options=sorted(df['Ano'].unique(), reverse=True))
+mes = col2.selectbox("📅 Filtrar por mês", options=['Todos'] + sorted(df['Mes'].unique().tolist()))
+dia = col3.selectbox("📅 Filtrar por dia", options=['Todos'] + sorted(df['Dia'].unique().tolist()))
+semana = col4.selectbox("📅 Filtrar por semana", options=['Todas'] + sorted(df['DiaSemana'].unique()))
 
-# MAIOR DIA DE ATENDIMENTOS
-if not df_filtrado.empty:
-    dia_maior = df_filtrado['Data'].value_counts().idxmax()
-    qtd_maior = df_filtrado['Data'].value_counts().max()
-    st.info(f"📅 Dia com mais atendimentos: {dia_maior.strftime('%d/%m/%Y')} com {qtd_maior} atendimentos")
+# Aplicando filtros
+filtro = df[df['Ano'] == ano]
+if mes != 'Todos':
+    filtro = filtro[filtro['Mes'] == mes]
+if dia != 'Todos':
+    filtro = filtro[filtro['Dia'] == dia]
+if semana != 'Todas':
+    filtro = filtro[filtro['DiaSemana'] == semana]
 
-# ATENDIMENTOS POR DIA DA SEMANA
-df_filtrado['DiaSemana'] = df_filtrado['Data'].dt.day_name().str[:3]
-dias_ordem = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-df_semana = df_filtrado['DiaSemana'].value_counts().reindex(dias_ordem).fillna(0).reset_index()
-df_semana.columns = ['DiaSemana', 'Qtd']
+# KPIs
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🧾 Total de atendimentos", len(filtro))
+col2.metric("👥 Clientes únicos", filtro['Cliente'].nunique())
+col3.metric("💰 Receita total", f"R$ {filtro['Valor'].sum():,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+media = filtro['Valor'].mean() if len(filtro) > 0 else 0
+col4.metric("💳 Ticket médio", f"R$ {media:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
 
-st.markdown("### 📅 Atendimentos por dia da semana")
-fig1 = px.bar(df_semana, x='DiaSemana', y='Qtd', text='Qtd', color_discrete_sequence=['#7B83EB'])
+# Dia com mais atendimentos
+if not filtro.empty:
+    dia_top = filtro['Data'].value_counts().idxmax().strftime("%d/%m/%Y")
+    qtd_top = filtro['Data'].value_counts().max()
+    st.info(f"📅 Dia com mais atendimentos: **{dia_top}** com **{qtd_top} atendimentos**")
+
+# Atendimentos por dia da semana
+atend_semana = filtro['DiaSemana'].value_counts().reindex(['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'])
+st.subheader("📅 Atendimentos por dia da semana")
+fig1 = px.bar(x=atend_semana.index, y=atend_semana.values, labels={'x': 'DiaSemana', 'y': 'Qtd Atendimentos'}, text=atend_semana.values, height=400)
+fig1.update_layout(yaxis=dict(title='Atendimentos'), xaxis=dict(title='Dia da Semana'))
 st.plotly_chart(fig1, use_container_width=True)
 
-# RECEITA MENSAL
-df_filtrado['AnoMes'] = df_filtrado['Data'].dt.to_period('M')
-df_mes = df_filtrado.groupby('AnoMes')['Valor'].sum().reset_index()
-df_mes['AnoMes'] = df_mes['AnoMes'].astype(str)
-
-st.markdown("### 📊 Receita Mensal por Mês e Ano")
-fig2 = px.bar(df_mes, x='AnoMes', y='Valor', text='Valor', color_discrete_sequence=['#82C9FF'])
-fig2.update_traces(texttemplate='R$ %{text:.2f}', textposition='outside')
-fig2.update_layout(xaxis_title="Mês", yaxis_title="Receita (R$)")
+# Receita mensal
+st.subheader("📊 Receita Mensal por Mês e Ano")
+df_receita = filtro.groupby(['Ano', 'Mes'])['Valor'].sum().reset_index()
+df_receita['DataLabel'] = pd.to_datetime(df_receita[['Ano', 'Mes']].assign(DAY=1)).dt.strftime('%B %Y')
+fig2 = px.bar(df_receita, x='DataLabel', y='Valor', text='Valor', labels={'Valor': 'Receita (R$)'})
+fig2.update_traces(texttemplate='R$ %{text:,.2f}', textposition='outside')
+fig2.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
 st.plotly_chart(fig2, use_container_width=True)
