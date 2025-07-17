@@ -12,29 +12,36 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ------------------------- CARREGAR PLANILHA ------------------------
 @st.cache_data
 def carregar_base_vinicius():
     url = "https://docs.google.com/spreadsheets/d/1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE/gviz/tq?tqx=out:csv&sheet=Base%20de%20Dados"
     df = pd.read_csv(url, encoding="utf-8")
 
-    # Limpar nomes de colunas
+    # Limpeza de colunas
     df.columns = df.columns.str.strip()
     df.columns = df.columns.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
 
-    # Detectar e padronizar coluna Valor
+    # Detectar coluna de valor
     col_valor = next((col for col in df.columns if "valor" in col.lower()), None)
     if not col_valor:
-        st.write("Colunas:", df.columns.tolist())
+        st.write("Colunas disponíveis:", df.columns.tolist())
         raise ValueError("❌ Coluna 'Valor' não encontrada.")
-
     df.rename(columns={col_valor: "Valor"}, inplace=True)
 
-    # Filtrar Vinicius
+    # Conversão de data
+    df["Data"] = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True)
+
+    # Diagnóstico: datas e funcionário
+    st.write("📅 Datas válidas detectadas:", df["Data"].dropna().dt.to_period("M").value_counts().sort_index())
+    st.write("👤 Funcionários encontrados:", df["Funcionario"].dropna().unique())
+
+    # Padroniza nomes de funcionários
+    df["Funcionario"] = df["Funcionario"].str.strip().str.title()
+
+    # Filtra Vinicius
     df = df[df["Funcionario"] == "Vinicius"]
 
-    # Corrigir tipos
-    df["Data"] = pd.to_datetime(df["Data"], dayfirst=True, errors="coerce")
+    # Converte Valor
     df["Valor"] = (
         df["Valor"]
         .astype(str)
@@ -46,14 +53,11 @@ def carregar_base_vinicius():
 
     return df
 
-# ------------------------- INÍCIO DO APP ------------------------
-
 try:
     df = carregar_base_vinicius()
 
-    # --------------------- FILTRO DE MÊS E ANO ---------------------
+    # FILTRO MÊS/ANO
     st.subheader("📅 Selecione o Mês e o Ano")
-
     meses_dict = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
         5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
@@ -68,7 +72,7 @@ try:
     mes = col1.selectbox("📆 Mês", options=meses_dict.keys(), format_func=lambda x: meses_dict[x], index=mes_atual-1)
     ano = col2.selectbox("🗓️ Ano", options=anos, index=anos.index(ano_atual))
 
-    # --------------------- FILTRAGEM ---------------------
+    # Filtragem
     df_mes = df[(df["Data"].dt.month == mes) & (df["Data"].dt.year == ano)]
 
     # Mês anterior
@@ -76,7 +80,7 @@ try:
     ano_ant = ano - 1 if mes == 1 else ano
     df_ant = df[(df["Data"].dt.month == mes_ant) & (df["Data"].dt.year == ano_ant)]
 
-    # --------------------- MÉTRICAS ---------------------
+    # MÉTRICAS
     receita = df_mes["Valor"].sum()
     receita_ant = df_ant["Valor"].sum()
     variacao = ((receita - receita_ant) / receita_ant * 100) if receita_ant > 0 else 0
@@ -87,14 +91,14 @@ try:
 
     st.markdown("---")
 
-    # --------------------- GRÁFICO ---------------------
+    # GRÁFICO
     st.subheader(f"📊 Evolução Diária - {meses_dict[mes]}/{ano}")
     df_dia = df_mes.groupby(df_mes["Data"].dt.date)["Valor"].sum().reset_index()
     fig = px.bar(df_dia, x="Data", y="Valor", text_auto=True, labels={"Data": "Dia", "Valor": "Receita (R$)"})
     fig.update_layout(xaxis_title="Data", yaxis_title="Receita (R$)", height=400)
     st.plotly_chart(fig, use_container_width=True)
 
-    # --------------------- TOP CLIENTES ---------------------
+    # TOP CLIENTES
     st.subheader("👤 Top 5 Clientes do Mês")
     top = df_mes.groupby("Cliente")["Valor"].sum().sort_values(ascending=False).head(5).reset_index()
     st.table(top.rename(columns={"Cliente": "Cliente", "Valor": "Receita (R$)"}))
