@@ -21,6 +21,16 @@ cloudinary.config(
     api_secret=st.secrets["CLOUDINARY"]["api_secret"]
 )
 
+# ========== FUNÇÃO PARA CARREGAR IMAGEM COM SEGURANÇA ==========
+def carregar_imagem_segura(url):
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200 and "image" in response.headers.get("Content-Type", ""):
+            return Image.open(BytesIO(response.content))
+    except Exception:
+        pass
+    return None
+
 # ========== CARREGAR DADOS ==========
 def carregar_dados():
     try:
@@ -80,17 +90,10 @@ else:
 
                 for i, (idx, row) in enumerate(grupo.iterrows()):
                     with cols[i % 3]:
-                        # Tenta carregar a imagem do cliente
-                        try:
-                            url_img = row["Foto"]
-                            response = requests.get(url_img, timeout=5)
-                            img = Image.open(BytesIO(response.content))
-                        except (requests.exceptions.RequestException, UnidentifiedImageError, Exception):
-                            try:
-                                response = requests.get(LOGO_PADRAO, timeout=5)
-                                img = Image.open(BytesIO(response.content))
-                            except:
-                                img = None
+                        # Carregar imagem do cliente com segurança
+                        img = carregar_imagem_segura(row["Foto"])
+                        if img is None:
+                            img = carregar_imagem_segura(LOGO_PADRAO)
 
                         if isinstance(img, Image.Image):
                             st.image(img, caption=row["Cliente"], use_container_width=True)
