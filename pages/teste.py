@@ -23,17 +23,19 @@ def carregar_base():
 # Carregar dados da planilha
 base = carregar_base()
 
-# Padronizar nome da coluna
+# Padronizar nome das colunas
 colunas_renomeadas = {col: col.strip().capitalize() for col in base.columns}
 base.rename(columns=colunas_renomeadas, inplace=True)
 
-# Garantir que coluna 'Profissional' exista
-if "Profissional" not in base.columns:
-    st.error("❌ Coluna 'Profissional' não encontrada na planilha.")
+# Verificar nome correto da coluna de profissional
+coluna_prof = [col for col in base.columns if col.strip().lower() in ["profissional", "funcionário"]]
+if not coluna_prof:
+    st.error("❌ Coluna de profissional não encontrada na planilha.")
     st.stop()
+coluna_prof = coluna_prof[0]
 
 # Filtrar somente atendimentos de Vinicius
-base_vini = base[base["Profissional"] == "Vinicius"].copy()
+base_vini = base[base[coluna_prof] == "Vinicius"].copy()
 
 # Converter valores
 base_vini["Valor"] = pd.to_numeric(base_vini["Valor"], errors="coerce")
