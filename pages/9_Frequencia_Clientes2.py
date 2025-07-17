@@ -29,6 +29,8 @@ def carregar_dados():
     df.columns = [str(col).strip() for col in df.columns]
     df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
     df = df.dropna(subset=["Data"])
+    if "Profissional" in df.columns:
+        df = df[df["Profissional"] != "JPaulo"]
     return df
 
 @st.cache_data
@@ -44,13 +46,10 @@ def carregar_status():
 
 # === PRÉ-PROCESSAMENTO
 df = carregar_dados()
-
-# REMOVE ATENDIMENTOS DO JPAULO
-df = df[df["Profissional"] != "JPaulo"]
-
 df_status = carregar_status()
-clientes_validos = df_status[~df_status["Status"].isin(["Inativo", "Ignorado"])]["Cliente"].unique().tolist()
-df = df[df["Cliente"].isin(clientes_validos)]
+clientes_validos = df_status[~df_status["Status"].isin(["Inativo", "Ignorado"])]
+clientes_validos = clientes_validos[~clientes_validos["Cliente"].str.lower().str.contains("jpaulo")]
+df = df[df["Cliente"].isin(clientes_validos["Cliente"])]
 atendimentos = df.drop_duplicates(subset=["Cliente", "Data"])
 
 # === CÁLCULO DE FREQUÊNCIA
