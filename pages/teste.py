@@ -7,61 +7,49 @@ import gspread
 st.set_page_config(page_title="Comissões Recebidas - Vinicius", layout="wide")
 st.title("💸 Comissões Recebidas - Vinicius")
 
-# Função para carregar a aba 'Despesas'
+# Função para carregar a aba 'Base de Dados'
 @st.cache_data
-
-def carregar_despesas():
+def carregar_base():
     escopos = ["https://www.googleapis.com/auth/spreadsheets"]
     credenciais = Credentials.from_service_account_info(
         st.secrets["GCP_SERVICE_ACCOUNT"], scopes=escopos
     )
     cliente = gspread.authorize(credenciais)
     planilha = cliente.open_by_url(st.secrets["PLANILHA_URL"])
-    aba = planilha.worksheet("Despesas")
+    aba = planilha.worksheet("Base de Dados")
     dados = aba.get_all_records()
     return pd.DataFrame(dados)
 
 # Carregar dados da planilha
-df_despesas = carregar_despesas()
+base = carregar_base()
 
-# Verificação de coluna correta
-coluna_desc = None
-for col in df_despesas.columns:
-    if col.lower().strip() in ["descricao", "descrição"]:
-        coluna_desc = col
-        break
+# Filtrar somente atendimentos de Vinicius
+base_vini = base[base["Profissional"] == "Vinicius"].copy()
 
-if not coluna_desc:
-    st.error("Coluna de descrição não encontrada. Verifique se existe 'Descrição' ou 'Descricao'.")
-    st.write("Colunas disponíveis:", df_despesas.columns.tolist())
+# Converter valores
+base_vini["Valor"] = pd.to_numeric(base_vini["Valor"], errors="coerce")
+base_vini["Data"] = pd.to_datetime(base_vini["Data"], errors="coerce")
+base_vini = base_vini.dropna(subset=["Data", "Valor"])
+
+# Estimar comissão real recebida
+# Se tiver campo específico de comissão, usar diretamente
+if "Comissão" in base_vini.columns:
+    base_vini["ComissaoRecebida"] = pd.to_numeric(base_vini["Comissão"], errors="coerce")
 else:
-    # Filtrar apenas comissões recebidas por Vinicius
-    df_vinicius = df_despesas[
-        df_despesas[coluna_desc].str.contains("vinicius", case=False, na=False)
-    ].copy()
+    # Caso contrário, calcular como 50% do valor bruto
+    base_vini["ComissaoRecebida"] = base_vini["Valor"] * 0.5
 
-    if df_vinicius.empty:
-        st.warning("Nenhuma comissão encontrada para Vinicius.")
-    else:
-        # Converter coluna de data
-        if "Data" in df_vinicius.columns:
-            df_vinicius["Data"] = pd.to_datetime(df_vinicius["Data"], errors="coerce")
-            df_vinicius = df_vinicius.dropna(subset=["Data"])
-            df_vinicius["Ano-Mês"] = df_vinicius["Data"].dt.to_period("M").astype(str)
+base_vini["Ano-Mês"] = base_vini["Data"].dt.to_period("M").astype(str)
 
-        # Gráfico mensal
-        if "Valor" in df_vinicius.columns:
-            df_vinicius["Valor"] = pd.to_numeric(df_vinicius["Valor"], errors="coerce")
-            df_mensal = df_vinicius.groupby("Ano-Mês")["Valor"].sum().reset_index()
+# Gráfico
+df_mensal = base_vini.groupby("Ano-Mês")["ComissaoRecebida"].sum().reset_index()
+st.subheader("📊 Gráfico de Comissões por Mês")
+fig = px.bar(df_mensal, x="Ano-Mês", y="ComissaoRecebida", text_auto=True)
+st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader("📊 Gráfico de Comissões por Mês")
-            fig = px.bar(df_mensal, x="Ano-Mês", y="Valor", text_auto=True)
-            st.plotly_chart(fig, use_container_width=True)
+# Tabela
+st.subheader("📋 Tabela Detalhada")
+st.dataframe(base_vini[["Data", "Cliente", "Serviço", "Valor", "ComissaoRecebida"]].sort_values("Data", ascending=False), use_container_width=True)
 
-            st.subheader("📋 Tabela Detalhada")
-            st.dataframe(df_vinicius[["Data", coluna_desc, "Valor"]].sort_values("Data", ascending=False), use_container_width=True)
-
-            total_pago = df_vinicius["Valor"].sum()
-            st.success(f"💰 Total de comissões recebidas: R$ {total_pago:,.2f}".replace(",", ".").replace(".", ",", 1))
-        else:
-            st.warning("Coluna 'Valor' não encontrada na planilha de despesas.")
+total_pago = base_vini["ComissaoRecebida"].sum()
+st.success(f"💰 Total de comissões recebidas: R$ {total_pago:,.2f}".replace(",", ".").replace(".", ",", 1))
