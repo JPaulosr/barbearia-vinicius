@@ -40,6 +40,11 @@ def carregar_dados():
 # ========== EXIBIR GALERIA ==========
 df, aba_clientes = carregar_dados()
 
+# === DEBUG ===
+with st.expander("🔍 DEBUG"):
+    st.write("Colunas:", df.columns.tolist())
+    st.dataframe(df.head())
+
 if df.empty or "Foto" not in df.columns:
     st.info("Nenhuma imagem encontrada.")
 else:
@@ -90,7 +95,7 @@ else:
                             st.image(LOGO_PADRAO, caption=f"{row['Cliente']} (imagem padrão)", use_container_width=True)
 
                         with st.expander(f"🛠 Ações para {row['Cliente']}"):
-                            if st.button(f"❌ Excluir imagem", key=f"excluir_{idx}"):
+                            if st.button(f"❌ Excluir imagem", key=f"excluir_{row['Cliente']}_{idx}"):
                                 try:
                                     cell = aba_clientes.find(str(row["Cliente"]))
                                     if cell:
@@ -108,7 +113,7 @@ else:
                                 except Exception as e:
                                     st.error(f"❌ Erro ao deletar imagem: {e}")
 
-                            nova_foto = st.text_input("🔄 Substituir link da imagem", key=f"edit_{idx}")
+                            nova_foto = st.text_input("🔄 Substituir link da imagem", key=f"edit_{row['Cliente']}_{idx}")
                             if nova_foto:
                                 try:
                                     cell = aba_clientes.find(str(row["Cliente"]))
