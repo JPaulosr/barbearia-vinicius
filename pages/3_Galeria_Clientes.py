@@ -6,12 +6,13 @@ from io import BytesIO
 
 st.set_page_config(page_title="Galeria de Clientes", layout="wide")
 
+# URL da imagem padrão (logo do salão)
 LOGO_PADRAO = "https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png"
 
-# Exemplo de dados simulados
+# Dados simulados
 df = pd.DataFrame({
     'Cliente': ['3'],
-    'Link_Foto': [None]  # ou tente com 'https://...' para testar com imagem real
+    'Link_Foto': [None]
 })
 
 st.title("🧑‍🦱 Galeria de Clientes")
@@ -31,23 +32,26 @@ if st.button("🟢 Expandir tudo"):
 if st.button("🔴 Recolher tudo"):
     st.session_state['expandir_tudo'] = False
 
+# Função para carregar imagem a partir da URL
+def carregar_imagem(url):
+    try:
+        response = requests.get(url, timeout=5)
+        return Image.open(BytesIO(response.content))
+    except Exception as e:
+        return None
+
 for letra in letras:
     grupo = df[df['Inicial'] == letra]
     with st.expander(f"{letra} ({len(grupo)} cliente{'s' if len(grupo) > 1 else ''})", expanded=st.session_state.get('expandir_tudo', False)):
         for _, row in grupo.iterrows():
             nome_cliente = row['Cliente']
-            url_imagem = row.get('Link_Foto', '')
+            url_imagem = str(row.get('Link_Foto', '') or '')
 
-            # DEBUG
-            st.write(f"Cliente: {nome_cliente} | URL: {url_imagem}")
+            # Tenta carregar imagem do cliente
+            imagem = carregar_imagem(url_imagem) if url_imagem.startswith("http") else None
 
-            if isinstance(url_imagem, str) and url_imagem.startswith("http"):
-                try:
-                    response = requests.get(url_imagem, timeout=5)
-                    img = Image.open(BytesIO(response.content))
-                    st.image(img, caption=str(nome_cliente), use_container_width=True)
-                except Exception as e:
-                    st.warning(f"Erro ao carregar imagem de {nome_cliente}. Usando imagem padrão.")
-                    st.image(LOGO_PADRAO, caption=f"{str(nome_cliente)} (imagem padrão)", use_container_width=True)
+            if imagem:
+                st.image(imagem, caption=str(nome_cliente), use_container_width=True)
             else:
-                st.image(LOGO_PADRAO, caption=f"{str(nome_cliente)} (imagem padrão)", use_container_width=True)
+                imagem_padrao = carregar_imagem(LOGO_PADRAO)
+                st.image(imagem_padrao, caption=f"{str(nome_cliente)} (imagem padrão)", use_container_width=True)
