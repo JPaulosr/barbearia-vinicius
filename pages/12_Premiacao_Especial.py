@@ -101,7 +101,6 @@ for cliente, qtd in servicos_var.items():
     mostrar_cliente(cliente, f"Usou **{qtd} tipos diferentes de serviços**.")
 
 # 👨‍👩‍👧‍👦 Cliente Família
-# 👨‍👩‍👧‍👦 Cliente Família
 st.subheader("👨‍👩‍👧‍👦 Cliente Família")
 df_familia = df.merge(df_status[["Cliente", "Família"]], on="Cliente", how="left")
 df_familia = df_familia[df_familia["Família"].notna() & (df_familia["Família"] != "")]
@@ -112,10 +111,19 @@ if not df_familia.empty:
     familia_top = gasto_total.index[0]
     total_gasto = gasto_total.iloc[0]
 
-    # Recalcular outras métricas apenas para a família vencedora
-    atendimentos_familia = df_familia[df_familia["Família"] == familia_top]
-    total_atendimentos = len(atendimentos_familia)
-    total_dias = atendimentos_familia.drop_duplicates(subset=["Data"]).shape[0]
+    # Filtrar só os atendimentos da família vencedora
+    df_top = df_familia[df_familia["Família"] == familia_top].copy()
+
+    # Corrigir a contagem de atendimentos com a lógica oficial
+    df_top["Data"] = pd.to_datetime(df_top["Data"])
+    df_top["Data_Agrupamento"] = df_top["Data"]
+    corte = pd.to_datetime("2025-05-11")
+    df_top["Data_Agrupamento"] = df_top.apply(
+        lambda row: f"{row['Cliente']}_{row['Data'].date()}" if row["Data"] >= corte else row.name,
+        axis=1
+    )
+    total_atendimentos = df_top["Data_Agrupamento"].nunique()
+    total_dias = df_top["Data"].dt.date.nunique()
     membros_df = df_status[df_status["Família"] == familia_top]
 
     st.markdown(f"### 🏅 Família {familia_top.title()}")
@@ -140,6 +148,7 @@ if not df_familia.empty:
             st.markdown(f"**{row['Cliente']}**")
 else:
     st.info("Nenhuma família com atendimentos foi encontrada.")
+
 
 # 🗓️ Cliente do Mês
 st.subheader("🗓️ Cliente do Mês")
