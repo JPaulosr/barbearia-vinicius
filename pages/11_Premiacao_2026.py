@@ -47,8 +47,14 @@ def carregar_fotos():
 df = carregar_dados()
 df_fotos = carregar_fotos()
 
-# === Função de ranking: ordena por valor, mostra só qtd de atendimentos ===
-def gerar_top3(df_base, titulo):
+# === Variável global para evitar duplicação de premiados ===
+clientes_premiados = set()
+
+# === Função de ranking ===
+def gerar_top3(df_base, titulo, excluir_clientes=None):
+    if excluir_clientes is None:
+        excluir_clientes = set()
+
     col1, col2, col3 = st.columns([0.05, 0.15, 0.8])
     col1.markdown("### ")
     col2.markdown(f"#### {titulo}")
@@ -56,18 +62,20 @@ def gerar_top3(df_base, titulo):
     df_base = df_base.copy()
     df_base["Valor"] = pd.to_numeric(df_base["Valor"], errors="coerce").fillna(0)
 
-    # Agrupar por Cliente + Data para valor por atendimento
+    # Agrupar por Cliente + Data
     valor_por_atendimento = df_base.groupby(["Cliente", "Data"], as_index=False)["Valor"].sum()
 
-    # Calcular total gasto por cliente
+    # Total gasto por cliente
     total_gasto_por_cliente = valor_por_atendimento.groupby("Cliente")["Valor"].sum()
 
-    # Top 3 clientes que mais gastaram
-    top3 = total_gasto_por_cliente.sort_values(ascending=False).head(3).index.tolist()
+    # Ordenar, excluir premiados e pegar Top 3
+    ranking = total_gasto_por_cliente.sort_values(ascending=False)
+    ranking = ranking[~ranking.index.isin(excluir_clientes)]
+    top3 = ranking.head(3).index.tolist()
     medalhas = ["🥇", "🥈", "🥉"]
 
     for i, cliente in enumerate(top3):
-        # Contar quantos atendimentos únicos esse cliente teve
+        clientes_premiados.add(cliente)
         atendimentos_unicos = valor_por_atendimento[valor_por_atendimento["Cliente"] == cliente]["Data"].nunique()
 
         linha = st.columns([0.05, 0.12, 0.83])
@@ -86,36 +94,67 @@ def gerar_top3(df_base, titulo):
 
         linha[2].markdown(f"**{cliente.lower()}** — {atendimentos_unicos} atendimentos")
 
-# === Top 3 Geral ===
+# === Premiação ===
 st.subheader("Top 3 Geral")
 gerar_top3(df, "")
 
-# === Top 3 JPaulo ===
 st.subheader("Top 3 JPaulo")
-gerar_top3(df[df["Funcionário"] == "JPaulo"], "")
+gerar_top3(df[df["Funcionário"] == "JPaulo"], "", excluir_clientes=clientes_premiados)
 
-# === Top 3 Vinicius ===
 st.subheader("Top 3 Vinicius")
-gerar_top3(df[df["Funcionário"] == "Vinicius"], "")
+gerar_top3(df[df["Funcionário"] == "Vinicius"], "", excluir_clientes=clientes_premiados)
 
-# === Cliente Família ===
-st.subheader("\U0001F468‍\U0001F469‍\U0001F467 Cliente Família")
-familia_df = df_fotos[df_fotos["Família"].notna() & (df_fotos["Família"] != "")]
-familias = familia_df["Família"].unique()
+# === Cliente Família - Top 3 Grupos ===
+# === Cliente Família - Top 3 Grupos (sem valor) ===
+# === Cliente Família - Top 3 Grupos ===
+st.subheader("👨‍👩‍👧‍👦 Cliente Família — Top 3 Grupos")
 
-for grupo in familias:
-    membros = familia_df[familia_df["Família"] == grupo]
-    for _, row in membros.iterrows():
-        linha = st.columns([0.05, 0.12, 0.83])
-        linha[0].text("")
-        if pd.notna(row["Foto"]):
-            try:
-                response = requests.get(row["Foto"])
-                img = Image.open(BytesIO(response.content))
-                linha[1].image(img, width=50)
-            except:
-                linha[1].image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=50)
-        else:
+# Junta dados com 'Família'
+df_familia = df.merge(df_fotos[["Cliente", "Família"]], on="Cliente", how="left")
+df_familia = df_familia[df_familia["Família"].notna() & (df_familia["Família"].str.strip() != "")]
+
+# Agrupa por Cliente + Data
+atendimentos_unicos = df_familia.groupby(["Cliente", "Data"], as_index=False)["Valor"].sum()
+atendimentos_unicos = atendimentos_unicos.merge(
+    df_familia[["Cliente", "Família"]].drop_duplicates(), on="Cliente", how="left"
+)
+
+# Conta total de atendimentos únicos por família
+familia_atendimentos = atendimentos_unicos.groupby("Família")["Data"].nunique().sort_values(ascending=False).head(3)
+
+medalhas = ["🥇", "🥈", "🥉"]
+
+for i, (familia, qtd_atendimentos) in enumerate(familia_atendimentos.items()):
+    membros = df_fotos[df_fotos["Família"] == familia]
+    qtd_membros = len(membros)
+
+    nome_pai = familia.replace("Família ", "").strip().lower()
+    nome_pai_formatado = nome_pai.capitalize()
+    membro_foto = None
+
+    # Tenta encontrar o cliente cujo nome seja exatamente igual ao nome do pai
+    for idx, row in membros.iterrows():
+        cliente_nome = str(row["Cliente"]).strip().lower()
+        foto = row["Foto"]
+        if cliente_nome == nome_pai and pd.notna(foto):
+            membro_foto = foto
+            break
+
+    # Se não achou o pai, usa a primeira foto válida
+    if not membro_foto and membros["Foto"].notna().any():
+        membro_foto = membros["Foto"].dropna().values[0]
+
+    linha = st.columns([0.05, 0.12, 0.83])
+    linha[0].markdown(f"### {medalhas[i]}")
+
+    if membro_foto:
+        try:
+            response = requests.get(membro_foto)
+            img = Image.open(BytesIO(response.content))
+            linha[1].image(img, width=50)
+        except:
             linha[1].image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=50)
+    else:
+        linha[1].image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=50)
 
-        linha[2].markdown(f"**{row['Cliente']}** — Membro da Família {grupo} 🍷")
+    linha[2].markdown(f"Família **{nome_pai_formatado}** — {qtd_atendimentos} atendimentos | {qtd_membros} membros")
