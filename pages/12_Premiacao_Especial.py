@@ -53,9 +53,9 @@ def mostrar_cliente(nome, legenda):
                 img = Image.open(BytesIO(response.content))
                 st.image(img, width=100)
             except:
-                st.write("📷")
+                st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=100)
         else:
-            st.write("📷")
+            st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=100)
     with col2:
         st.markdown(f"### 🏅 {nome.title()}")
         st.markdown(legenda)
@@ -102,17 +102,52 @@ for cliente, qtd in servicos_var.items():
 
 # 👨‍👩‍👧‍👦 Cliente Família
 st.subheader("👨‍👩‍👧‍👦 Cliente Família")
-familia = df_status[df_status["Família"].str.lower() == "sim"]
-mais_familia = df[df["Cliente"].isin(familia["Cliente"])].groupby("Cliente")["Data"].nunique().sort_values(ascending=False).head(1)
-for cliente, qtd in mais_familia.items():
-    mostrar_cliente(cliente, f"Trouxe a família em **{qtd} dias diferentes**.")
+df_familia = df.merge(df_status[["Cliente", "Família"]], on="Cliente", how="left")
+df_familia = df_familia[df_familia["Família"].notna() & (df_familia["Família"] != "")]
 
-# 💺 Cliente do Primeiro Mês
-st.subheader("💺 Cliente do Primeiro Mês")
-primeiro_mes = df[df["Data"].dt.to_period("M") == pd.Period("2023-03")]
-clientes_primeiros = primeiro_mes["Cliente"].value_counts().head(1)
-for cliente, qtd in clientes_primeiros.items():
-    mostrar_cliente(cliente, f"Fez **{qtd} atendimentos no mês de estreia**.")
+if not df_familia.empty:
+    atendimentos_total = df_familia.groupby("Família").size().sort_values(ascending=False)
+    dias_familia = df_familia.drop_duplicates(subset=["Família", "Data"])
+    dias_por_familia = dias_familia.groupby("Família")["Data"].count()
+    familia_top = atendimentos_total.index[0]
+    total_atendimentos = atendimentos_total.iloc[0]
+    total_dias = dias_por_familia.get(familia_top, 0)
+    membros_df = df_status[df_status["Família"] == familia_top]
+
+    st.markdown(f"### 🏅 Família {familia_top.title()}")
+    st.markdown(
+        f"Família **{familia_top.lower()}** teve atendimentos em **{total_dias} dias diferentes**, "
+        f"somando **{total_atendimentos} atendimentos individuais** entre todos os membros."
+    )
+
+    for _, row in membros_df.iterrows():
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            try:
+                if pd.notna(row["Foto"]):
+                    response = requests.get(row["Foto"])
+                    img = Image.open(BytesIO(response.content))
+                    st.image(img, width=100)
+                else:
+                    raise Exception("sem imagem")
+            except:
+                st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=100)
+        with col2:
+            st.markdown(f"**{row['Cliente']}**")
+else:
+    st.info("Nenhuma família com atendimentos foi encontrada.")
+
+# 🗓️ Cliente do Mês
+st.subheader("🗓️ Cliente do Mês")
+mes_atual = pd.Timestamp.now().month
+ano_atual = pd.Timestamp.now().year
+df_mes = df[(df["Data"].dt.month == mes_atual) & (df["Data"].dt.year == ano_atual)]
+cliente_mes = df_mes["Cliente"].value_counts().head(1)
+if not cliente_mes.empty:
+    for cliente, qtd in cliente_mes.items():
+        mostrar_cliente(cliente, f"Fez **{qtd} atendimentos** no mês atual.")
+else:
+    st.info("Nenhum cliente válido encontrado neste mês.")
 
 # ✨ Cliente Revelação
 st.subheader("✨ Cliente Revelação")
