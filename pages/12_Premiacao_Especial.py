@@ -1,16 +1,19 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from gspread_dataframe import get_as_dataframe
-from google.oauth2.service_account import Credentials
 import requests
 from PIL import Image
 from io import BytesIO
+import gspread
+from gspread_dataframe import get_as_dataframe
+from google.oauth2.service_account import Credentials
 
 st.set_page_config(layout="wide")
-st.title("🏆 Premiação Especial - Destaques do Ano")
+st.subheader("👨‍👩‍👧‍👦 Cliente Família — Todas as Famílias")
 
+# === GOOGLE SHEETS ===
 SHEET_ID = "1qtOF1I7Ap4By2388ySThoVlZHbI3rAJv_haEcil0IUE"
+ABA_BASE = "Base de Dados"
+ABA_STATUS = "clientes_status"
 
 @st.cache_resource
 def conectar_sheets():
@@ -23,90 +26,79 @@ def conectar_sheets():
 @st.cache_data
 def carregar_dados():
     planilha = conectar_sheets()
-    aba = planilha.worksheet("Base de Dados")
-    df = get_as_dataframe(aba).dropna(how="all")
-    df.columns = [str(col).strip() for col in df.columns]
+    df = get_as_dataframe(planilha.worksheet(ABA_BASE)).dropna(how="all")
+    df.columns = [c.strip() for c in df.columns]
     df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
     df = df.dropna(subset=["Data"])
+    df = df.dropna(subset=["Cliente", "Funcionário"])
+    df = df[df["Cliente"].str.lower().str.contains("boliviano|brasileiro|menino|sem preferencia|funcionário") == False]
+    df = df[df["Cliente"].str.strip() != ""]
+    df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0)
     return df
 
 @st.cache_data
-def carregar_status():
+def carregar_fotos():
     planilha = conectar_sheets()
-    aba = planilha.worksheet("clientes_status")
-    df = get_as_dataframe(aba).dropna(how="all")
-    df.columns = [str(col).strip() for col in df.columns]
-    return df
-
-def limpar_nomes(nome):
-    nome = str(nome).strip().lower()
-    nomes_excluir = ["boliviano", "brasileiro", "menino", "sem nome", "cliente", "sem preferência", "sem preferencia"]
-    return not any(gen in nome for gen in nomes_excluir)
-
-def mostrar_cliente(nome, legenda):
-    foto = df_status[df_status["Cliente"] == nome]["Foto"].dropna().values
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        if len(foto) > 0:
-            try:
-                response = requests.get(foto[0])
-                img = Image.open(BytesIO(response.content))
-                st.image(img, width=100)
-            except:
-                st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=100)
-        else:
-            st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=100)
-    with col2:
-        st.markdown(f"### 🏅 {nome.title()}")
-        st.markdown(legenda)
+    df_status = get_as_dataframe(planilha.worksheet(ABA_STATUS)).dropna(how="all")
+    df_status.columns = [c.strip() for c in df_status.columns]
+    return df_status[["Cliente", "Foto", "Família"]].dropna(subset=["Cliente"])
 
 df = carregar_dados()
-df_status = carregar_status()
-df = df[df["Cliente"].notna() & df["Cliente"].apply(limpar_nomes)]
-df = df[df["Valor"] > 0]
+df_fotos = carregar_fotos()
 
-# 👨‍👩‍👧‍👦 Cliente Família — Todas as Famílias
-st.subheader("👨‍👩‍👧‍👦 Cliente Família — Todas as Famílias")
+# Junta dados com 'Família'
+df_familia = df.merge(df_fotos[["Cliente", "Família"]], on="Cliente", how="left")
+df_familia = df_familia[df_familia["Família"].notna() & (df_familia["Família"].str.strip() != "")]
 
-df_familia = df.merge(df_status[["Cliente", "Família"]], on="Cliente", how="left")
-df_familia = df_familia[df_familia["Família"].notna() & (df_familia["Família"] != "")]
+# Agrupa por Família e soma valores
+familia_valores = df_familia.groupby("Família")["Valor"].sum()
+familia_valores = familia_valores[familia_valores > 0].sort_values(ascending=False)
 
-# Agrupa por Família, Cliente e Data para contar 1 atendimento por cliente/dia
-familia_contagem = df_familia.groupby(["Família", "Cliente", df_familia["Data"].dt.date]).size().reset_index(name="Qtd")
-
-# Soma por Família
-total_atendimentos = familia_contagem.groupby("Família").size()
+# Conta atendimentos únicos por cliente + data
+atendimentos_unicos = df_familia.drop_duplicates(subset=["Cliente", "Data"])
+familia_atendimentos = atendimentos_unicos.groupby("Família").size()
 dias_distintos = df_familia.drop_duplicates(subset=["Família", "Data"]).groupby("Família").size()
 
-# Junta os dados em um DataFrame
-familias_df = pd.DataFrame({
-    "Atendimentos": total_atendimentos,
-    "Dias Diferentes": dias_distintos
-}).reset_index().sort_values("Atendimentos", ascending=False)
+for idx, familia in enumerate(familia_valores.index):
+    valor_total = familia_valores[familia]
+    qtd_atendimentos = familia_atendimentos.get(familia, 0)
+    qtd_dias = dias_distintos.get(familia, 0)
 
-for _, row in familias_df.iterrows():
-    familia = row["Família"]
-    qtd_atendimentos = row["Atendimentos"]
-    qtd_dias = row["Dias Diferentes"]
+    membros = df_fotos[df_fotos["Família"] == familia]
+    qtd_membros = len(membros)
 
-    st.markdown(f"### 🏅 Família {familia.title()}")
-    st.markdown(
-        f"A família **{familia.lower()}** teve atendimentos em **{qtd_dias} dias diferentes**, "
-        f"somando **{qtd_atendimentos} atendimentos individuais** entre todos os membros."
-    )
+    nome_pai = familia.replace("Família ", "").strip().lower()
+    nome_pai_formatado = nome_pai.capitalize()
+    membro_foto = None
 
-    membros_df = df_status[df_status["Família"] == familia]
-    for _, membro in membros_df.iterrows():
-        col1, col2 = st.columns([1, 5])
-        with col1:
-            try:
-                if pd.notna(membro["Foto"]):
-                    response = requests.get(membro["Foto"])
-                    img = Image.open(BytesIO(response.content))
-                    st.image(img, width=100)
-                else:
-                    raise Exception("sem imagem")
-            except:
-                st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=100)
-        with col2:
-            st.markdown(f"**{membro['Cliente']}**")
+    for i, row in membros.iterrows():
+        cliente_nome = str(row["Cliente"]).strip().lower()
+        foto = row["Foto"]
+        if cliente_nome == nome_pai and pd.notna(foto):
+            membro_foto = foto
+            break
+
+    if not membro_foto and membros["Foto"].notna().any():
+        membro_foto = membros["Foto"].dropna().values[0]
+
+    linha = st.columns([0.05, 0.12, 0.83])
+    linha[0].markdown(f"### {idx + 1}")
+
+    if membro_foto:
+        try:
+            response = requests.get(membro_foto)
+            img = Image.open(BytesIO(response.content))
+            linha[1].image(img, width=50)
+        except:
+            linha[1].image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=50)
+    else:
+        linha[1].image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=50)
+
+    texto = f"""
+    Família **{nome_pai_formatado}**  
+    💰 Total gasto: R$ {valor_total:,.2f}  
+    📆 Dias distintos: {qtd_dias}  
+    🧼 Atendimentos: {qtd_atendimentos}  
+    👥 Membros: {qtd_membros}
+    """
+    linha[2].markdown(texto)
