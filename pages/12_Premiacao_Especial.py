@@ -101,31 +101,43 @@ for cliente, qtd in servicos_var.items():
     mostrar_cliente(cliente, f"Usou **{qtd} tipos diferentes de serviços**.")
 
 # 👨‍👩‍👧‍👦 Cliente Família
-st.subheader("👨‍👩‍👧‍👦 Cliente Família")
+# 👨‍👩‍👧‍👦 Cliente Família – Todos os Grupos
+st.subheader("👨‍👩‍👧‍👦 Cliente Família — Todas as Famílias")
+
 df_familia = df.merge(df_status[["Cliente", "Família"]], on="Cliente", how="left")
 df_familia = df_familia[df_familia["Família"].notna() & (df_familia["Família"] != "")]
 
-if not df_familia.empty:
-    atendimentos_total = df_familia.groupby("Família").size().sort_values(ascending=False)
-    dias_familia = df_familia.drop_duplicates(subset=["Família", "Data"])
-    dias_por_familia = dias_familia.groupby("Família")["Data"].count()
-    familia_top = atendimentos_total.index[0]
-    total_atendimentos = atendimentos_total.iloc[0]
-    total_dias = dias_por_familia.get(familia_top, 0)
-    membros_df = df_status[df_status["Família"] == familia_top]
+# Agrupa por Família, Cliente e Data para contar 1 atendimento por cliente/dia
+familia_contagem = df_familia.groupby(["Família", "Cliente", df_familia["Data"].dt.date]).size().reset_index(name="Qtd")
 
-    st.markdown(f"### 🏅 Família {familia_top.title()}")
+# Soma por Família
+total_atendimentos = familia_contagem.groupby("Família").size()
+dias_distintos = df_familia.drop_duplicates(subset=["Família", "Data"]).groupby("Família").size()
+
+# Junta os dados em um DataFrame
+familias_df = pd.DataFrame({
+    "Atendimentos": total_atendimentos,
+    "Dias Diferentes": dias_distintos
+}).reset_index().sort_values("Atendimentos", ascending=False)
+
+for _, row in familias_df.iterrows():
+    familia = row["Família"]
+    qtd_atendimentos = row["Atendimentos"]
+    qtd_dias = row["Dias Diferentes"]
+    
+    st.markdown(f"### 🏅 Família {familia.title()}")
     st.markdown(
-        f"Família **{familia_top.lower()}** teve atendimentos em **{total_dias} dias diferentes**, "
-        f"somando **{total_atendimentos} atendimentos individuais** entre todos os membros."
+        f"A família **{familia.lower()}** teve atendimentos em **{qtd_dias} dias diferentes**, "
+        f"somando **{qtd_atendimentos} atendimentos individuais** entre todos os membros."
     )
 
-    for _, row in membros_df.iterrows():
+    membros_df = df_status[df_status["Família"] == familia]
+    for _, membro in membros_df.iterrows():
         col1, col2 = st.columns([1, 5])
         with col1:
             try:
-                if pd.notna(row["Foto"]):
-                    response = requests.get(row["Foto"])
+                if pd.notna(membro["Foto"]):
+                    response = requests.get(membro["Foto"])
                     img = Image.open(BytesIO(response.content))
                     st.image(img, width=100)
                 else:
@@ -133,9 +145,8 @@ if not df_familia.empty:
             except:
                 st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=100)
         with col2:
-            st.markdown(f"**{row['Cliente']}**")
-else:
-    st.info("Nenhuma família com atendimentos foi encontrada.")
+            st.markdown(f"**{membro['Cliente']}**")
+
 
 # 🗓️ Cliente do Mês
 st.subheader("🗓️ Cliente do Mês")
