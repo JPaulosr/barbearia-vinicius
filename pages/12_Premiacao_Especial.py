@@ -65,43 +65,7 @@ df_status = carregar_status()
 df = df[df["Cliente"].notna() & df["Cliente"].apply(limpar_nomes)]
 df = df[df["Valor"] > 0]
 
-# 🎯 Cliente Mais Fiel
-st.subheader("🎯 Cliente Mais Fiel")
-clientes_fieis = df.groupby("Cliente")["Data"].apply(lambda x: x.dt.to_period("M").nunique()).sort_values(ascending=False).head(1)
-for cliente, meses in clientes_fieis.items():
-    mostrar_cliente(cliente, f"Participou em **{meses} meses diferentes**!")
-
-# 🧼 Cliente Combo
-st.subheader("🧼 Cliente Combo")
-df_combo = df.copy()
-df_combo["Dia"] = df_combo["Data"].dt.date
-combos = df_combo.groupby(["Cliente", "Dia"]).size().reset_index(name="Qtd")
-combos = combos[combos["Qtd"] > 1]
-combo_count = combos.groupby("Cliente")["Dia"].count().sort_values(ascending=False).head(1)
-for cliente, qtd in combo_count.items():
-    mostrar_cliente(cliente, f"Fez **{qtd} atendimentos com combos**!")
-
-# 📅 Cliente Frequente
-st.subheader("📅 Cliente Frequente")
-freq_resultados = []
-for nome, grupo in df.groupby("Cliente"):
-    datas = sorted(grupo["Data"].drop_duplicates())
-    if len(datas) >= 2:
-        intervalos = [(datas[i] - datas[i - 1]).days for i in range(1, len(datas))]
-        media_dias = sum(intervalos) / len(intervalos)
-        freq_resultados.append((nome, media_dias))
-df_freq = pd.DataFrame(freq_resultados, columns=["Cliente", "Frequência Média"]).sort_values("Frequência Média").head(1)
-for _, row in df_freq.iterrows():
-    mostrar_cliente(row["Cliente"], f"Retornava em média a cada **{row['Frequência Média']:.1f} dias**.")
-
-# 🛍️ Cliente Mais Variado
-st.subheader("🛍️ Cliente Mais Variado")
-servicos_var = df.groupby("Cliente")["Serviço"].nunique().sort_values(ascending=False).head(1)
-for cliente, qtd in servicos_var.items():
-    mostrar_cliente(cliente, f"Usou **{qtd} tipos diferentes de serviços**.")
-
-# 👨‍👩‍👧‍👦 Cliente Família
-# 👨‍👩‍👧‍👦 Cliente Família – Todos os Grupos
+# 👨‍👩‍👧‍👦 Cliente Família — Todas as Famílias
 st.subheader("👨‍👩‍👧‍👦 Cliente Família — Todas as Famílias")
 
 df_familia = df.merge(df_status[["Cliente", "Família"]], on="Cliente", how="left")
@@ -124,7 +88,7 @@ for _, row in familias_df.iterrows():
     familia = row["Família"]
     qtd_atendimentos = row["Atendimentos"]
     qtd_dias = row["Dias Diferentes"]
-    
+
     st.markdown(f"### 🏅 Família {familia.title()}")
     st.markdown(
         f"A família **{familia.lower()}** teve atendimentos em **{qtd_dias} dias diferentes**, "
@@ -146,24 +110,3 @@ for _, row in familias_df.iterrows():
                 st.image("https://res.cloudinary.com/db8ipmete/image/upload/v1752463905/Logo_sal%C3%A3o_kz9y9c.png", width=100)
         with col2:
             st.markdown(f"**{membro['Cliente']}**")
-
-
-# 🗓️ Cliente do Mês
-st.subheader("🗓️ Cliente do Mês")
-mes_atual = pd.Timestamp.now().month
-ano_atual = pd.Timestamp.now().year
-df_mes = df[(df["Data"].dt.month == mes_atual) & (df["Data"].dt.year == ano_atual)]
-cliente_mes = df_mes["Cliente"].value_counts().head(1)
-if not cliente_mes.empty:
-    for cliente, qtd in cliente_mes.items():
-        mostrar_cliente(cliente, f"Fez **{qtd} atendimentos** no mês atual.")
-else:
-    st.info("Nenhum cliente válido encontrado neste mês.")
-
-# ✨ Cliente Revelação
-st.subheader("✨ Cliente Revelação")
-data_corte = pd.to_datetime("2025-01-01")
-recentes = df[df["Data"] >= data_corte]
-novatos = recentes.groupby("Cliente")["Data"].nunique().sort_values(ascending=False).head(1)
-for cliente, dias in novatos.items():
-    mostrar_cliente(cliente, f"Novo cliente com **{dias} visitas recentes** desde 2025.")
