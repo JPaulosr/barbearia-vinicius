@@ -1,5 +1,21 @@
-# -*- coding: utf-8 -*-
-# 11_Adicionar_Atendimento.py
+import streamlit as st
+import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
+from gspread_dataframe import get_as_dataframe, set_with_dataframe
+from gspread.utils import rowcol_to_a1
+from datetime import datetime
+import pytz
+import unicodedata
+import requests
+from collections import Counter
+
+# >>> TEM QUE VIR AQUI, ANTES DE QUALQUER @st.cache_* OU st.* <<<
+st.set_page_config(
+    page_title="Adicionar Atendimento — Vinicius",
+    page_icon="✂️",
+    layout="wide"
+)
 import streamlit as st
 import pandas as pd
 import gspread
