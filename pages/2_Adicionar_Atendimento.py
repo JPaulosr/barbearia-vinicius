@@ -586,7 +586,21 @@ modo_lote = st.toggle("📦 Cadastro em Lote (vários clientes de uma vez)", val
 # Data sempre visível
 # garantir fuso horário de Brasília (UTC-3)
 hoje_br = datetime.now(pytz.timezone("America/Sao_Paulo")).date()
-data = st.date_input("Data", value=hoje_br).strftime("%d/%m/%Y")
+from datetime import datetime
+import pytz
+from babel.dates import format_date
+
+# Data padrão: hoje no fuso horário do Brasil
+hoje_br = datetime.now(pytz.timezone("America/Sao_Paulo")).date()
+
+# Campo de calendário (mantém calendário interativo)
+data_input = st.date_input("Data", value=hoje_br)
+
+# Converte para string no formato brasileiro (dd/mm/aaaa)
+data = data_input.strftime("%d/%m/%Y")
+
+# (Opcional) também exibir a data por extenso em português
+st.caption(f"Data selecionada: {format_date(data_input, format='full', locale='pt_BR')}")
 
 # Mostrar campos “padrão” **apenas** no modo Lote
 if modo_lote:
